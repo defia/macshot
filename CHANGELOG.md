@@ -12,6 +12,10 @@
 - **GIF export uses gifski when available** (app bundle, `/opt/homebrew/bin`, or `/usr/local/bin`) — encodes on all cores and streams frames to disk, so memory stays flat and long recordings no longer crash at finalize. Smaller, better-looking GIFs; falls back to the built-in encoder when gifski is absent. Thanks @anten-ka! (#295, #296)
 - GIF conversion runs at user-initiated priority instead of background — several times faster on Apple Silicon, where background QoS is confined to efficiency cores. (#296)
 
+### Fixed
+
+- **Video editor Copy** — copying an MP4 recording now writes playable video data to the clipboard instead of a sandboxed file URL that many apps reject. (#329)
+
 ## [4.2.1] - 2026-07-10
 
 ### Added
