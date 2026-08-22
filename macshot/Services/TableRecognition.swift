@@ -3,9 +3,11 @@ import Vision
 
 struct RecognizedTable: Equatable {
     let rows: [[String]]
+    let columnCount: Int
 
-    var columnCount: Int {
-        rows.map(\.count).max() ?? 0
+    nonisolated init(rows: [[String]]) {
+        self.rows = rows
+        self.columnCount = rows.map(\.count).max() ?? 0
     }
 
     var tsv: String {
@@ -139,6 +141,28 @@ enum VisionTableRecognizer {
 }
 
 enum TableStructureDetector {
+    private enum ColumnAlignment: CaseIterable, Sendable {
+        case left
+        case center
+        case right
+    }
+
+    private struct ColumnAnchor: Sendable {
+        let position: CGFloat
+        let center: CGFloat
+        let alignment: ColumnAlignment
+    }
+
+    private struct AnchorCandidate: Sendable {
+        let anchor: ColumnAnchor
+        let blockIndices: Set<Int>
+    }
+
+    private struct AnchorCluster {
+        var blocks: [(offset: Int, element: TableTextBlock)]
+        var positions: [CGFloat]
+    }
+
     private struct RowCluster {
         var blocks: [TableTextBlock]
 
@@ -270,14 +294,16 @@ enum TableStructureDetector {
             cells[row, default: [:]][column, default: []].append(block)
         }
 
-        let occupiedRows = cells.keys.sorted(by: >)
+        let occupiedRows = cells.keys.sorted()
         let occupiedColumns = Set(cells.values.flatMap(\.keys)).sorted()
         guard occupiedRows.count >= 2,
+              let firstRow = occupiedRows.first,
+              let lastRow = occupiedRows.last,
               let firstColumn = occupiedColumns.first,
               let lastColumn = occupiedColumns.last,
               lastColumn > firstColumn else { return nil }
 
-        let rows = occupiedRows.map { row in
+        let rows = (firstRow...lastRow).reversed().map { row in
             (firstColumn...lastColumn).map { column in
                 cellText(cells[row]?[column] ?? [])
             }
@@ -333,7 +359,7 @@ enum TableStructureDetector {
             .joined(separator: "\n")
     }
 
-    private nonisolated static func columnAnchors(from rows: [RowCluster]) -> [CGFloat]? {
+    private nonisolated static func columnAnchors(from rows: [RowCluster]) -> [ColumnAnchor]? {
         let candidates = rows
             .filter { $0.blocks.count >= 2 }
             .flatMap(\.blocks)
@@ -343,32 +369,79 @@ enum TableStructureDetector {
             $0.boundingBox.width / CGFloat(max($0.text.count, 1))
         }
         let tolerance = min(max(median(characterWidths) * 1.5, 0.006), 0.025)
-        var clusters: [[TableTextBlock]] = []
-        for block in candidates.sorted(by: { $0.boundingBox.minX < $1.boundingBox.minX }) {
-            if let last = clusters.indices.last,
-               abs(median(clusters[last].map(\.boundingBox.minX)) - block.boundingBox.minX)
-                   <= tolerance {
-                clusters[last].append(block)
-            } else {
-                clusters.append([block])
+
+        let indexedCandidates = Array(candidates.enumerated())
+        var anchorCandidates: [AnchorCandidate] = []
+        for alignment in ColumnAlignment.allCases {
+            var clusters: [AnchorCluster] = []
+            for block in indexedCandidates.sorted(by: {
+                alignedPosition(of: $0.element, alignment: alignment)
+                    < alignedPosition(of: $1.element, alignment: alignment)
+            }) {
+                let position = alignedPosition(of: block.element, alignment: alignment)
+                if let last = clusters.indices.last,
+                   abs(medianOfSorted(clusters[last].positions) - position) <= tolerance {
+                    clusters[last].blocks.append(block)
+                    clusters[last].positions.append(position)
+                } else {
+                    clusters.append(AnchorCluster(blocks: [block], positions: [position]))
+                }
+            }
+
+            for cluster in clusters where cluster.blocks.count >= 2 {
+                anchorCandidates.append(AnchorCandidate(
+                    anchor: ColumnAnchor(
+                        position: medianOfSorted(cluster.positions),
+                        center: median(cluster.blocks.map(\.element.boundingBox.midX)),
+                        alignment: alignment
+                    ),
+                    blockIndices: Set(cluster.blocks.map(\.offset))
+                ))
             }
         }
 
-        let anchors = clusters
-            .filter { $0.count >= 2 }
-            .map { median($0.map(\.boundingBox.minX)) }
-            .sorted()
+        var usedBlockIndices: Set<Int> = []
+        var anchors: [ColumnAnchor] = []
+        for candidate in anchorCandidates.sorted(by: {
+            if $0.blockIndices.count != $1.blockIndices.count {
+                return $0.blockIndices.count > $1.blockIndices.count
+            }
+            return $0.anchor.center < $1.anchor.center
+        }) where candidate.blockIndices.isDisjoint(with: usedBlockIndices) {
+            anchors.append(candidate.anchor)
+            usedBlockIndices.formUnion(candidate.blockIndices)
+        }
+        anchors.sort { $0.center < $1.center }
         return anchors.count >= 2 ? anchors : nil
     }
 
     private nonisolated static func columnIndex(
         for block: TableTextBlock,
-        anchors: [CGFloat]
+        anchors: [ColumnAnchor]
     ) -> Int {
         anchors.indices.min {
-            abs(anchors[$0] - block.boundingBox.minX)
-                < abs(anchors[$1] - block.boundingBox.minX)
+            abs(anchors[$0].position - alignedPosition(
+                of: block,
+                alignment: anchors[$0].alignment
+            )) < abs(anchors[$1].position - alignedPosition(
+                of: block,
+                alignment: anchors[$1].alignment
+            ))
         } ?? 0
+    }
+
+    private nonisolated static func alignedPosition(
+        of block: TableTextBlock,
+        alignment: ColumnAlignment
+    ) -> CGFloat {
+        switch alignment {
+        case .left:
+            return block.boundingBox.minX
+        case .center:
+            return block.boundingBox.midX
+        case .right:
+            return block.boundingBox.maxX
+        }
     }
 
     private nonisolated static func readingOrder(
@@ -389,10 +462,15 @@ enum TableStructureDetector {
     private nonisolated static func median(_ values: [CGFloat]) -> CGFloat {
         guard !values.isEmpty else { return 0 }
         let sorted = values.sorted()
-        let middle = sorted.count / 2
-        if sorted.count.isMultiple(of: 2) {
-            return (sorted[middle - 1] + sorted[middle]) / 2
+        return medianOfSorted(sorted)
+    }
+
+    private nonisolated static func medianOfSorted(_ values: [CGFloat]) -> CGFloat {
+        guard !values.isEmpty else { return 0 }
+        let middle = values.count / 2
+        if values.count.isMultiple(of: 2) {
+            return (values[middle - 1] + values[middle]) / 2
         }
-        return sorted[middle]
+        return values[middle]
     }
 }

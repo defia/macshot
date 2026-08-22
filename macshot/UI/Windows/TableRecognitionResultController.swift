@@ -6,6 +6,7 @@ class TableRecognitionResultController: NSObject {
     private let table: RecognizedTable
     private let workbookData: Data
     private let temporaryWorkbookURL: URL
+    private var removesTemporaryWorkbookOnClose = true
 
     /// Invoked once when the result window closes so its owner can release it.
     var onClose: (() -> Void)?
@@ -134,9 +135,12 @@ class TableRecognitionResultController: NSObject {
     }
 
     @objc private func openExcelFile() {
-        let url = temporaryWorkbookURL
+        guard NSWorkspace.shared.open(temporaryWorkbookURL) else {
+            showOpenError()
+            return
+        }
+        removesTemporaryWorkbookOnClose = false
         close()
-        NSWorkspace.shared.open(url)
     }
 
     @objc private func saveAs() {
@@ -186,6 +190,16 @@ class TableRecognitionResultController: NSObject {
         alert.messageText = L("Could Not Create Excel File")
         alert.informativeText = error?.localizedDescription
             ?? L("The Excel file could not be written. Please try again.")
+        alert.alertStyle = .warning
+        if let window {
+            alert.beginSheetModal(for: window)
+        }
+    }
+
+    private func showOpenError() {
+        let alert = NSAlert()
+        alert.messageText = L("Could Not Open Excel File")
+        alert.informativeText = L("No application is available to open Excel files.")
         alert.alertStyle = .warning
         if let window {
             alert.beginSheetModal(for: window)
@@ -249,6 +263,9 @@ extension TableRecognitionResultController: NSTableViewDataSource, NSTableViewDe
 extension TableRecognitionResultController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard window != nil else { return }
+        if removesTemporaryWorkbookOnClose {
+            try? FileManager.default.removeItem(at: temporaryWorkbookURL)
+        }
         window?.delegate = nil
         window = nil
         onClose?()
