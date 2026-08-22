@@ -406,6 +406,8 @@
 "The recognized table is too large to create an Excel file." = "识别的表格过大，无法创建 Excel 文件。";
 "Could Not Create Excel File" = "无法创建 Excel 文件";
 "The Excel file could not be written. Please try again." = "无法写入 Excel 文件，请重试。";
+"Could Not Open Excel File" = "无法打开 Excel 文件";
+"No application is available to open Excel files." = "没有可用于打开 Excel 文件的应用。";
 
 /* Upload Toast */
 "URL copied to the clipboard" = "URL 已拷贝到剪贴板";

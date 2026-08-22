@@ -434,6 +434,8 @@
 "The recognized table is too large to create an Excel file." = "The recognized table is too large to create an Excel file.";
 "Could Not Create Excel File" = "Could Not Create Excel File";
 "The Excel file could not be written. Please try again." = "The Excel file could not be written. Please try again.";
+"Could Not Open Excel File" = "Could Not Open Excel File";
+"No application is available to open Excel files." = "No application is available to open Excel files.";
 
 /* Upload Toast */
 "URL copied to the clipboard" = "URL copied to the clipboard";
