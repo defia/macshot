@@ -2466,8 +2466,8 @@ extension AppDelegate: OverlayWindowControllerDelegate {
         switch result {
         case .success(let table):
             do {
-                tableRecognitionController?.close()
                 let resultController = try TableRecognitionResultController(table: table)
+                tableRecognitionController?.close()
                 resultController.onClose = { [weak self, weak resultController] in
                     if self?.tableRecognitionController === resultController {
                         self?.tableRecognitionController = nil
