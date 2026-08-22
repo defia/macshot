@@ -4,7 +4,13 @@ extension OverlayView {
 
     static let browserElementSnapEnabledKey = "browserElementSnapEnabled"
     private static let browserAccessibilityLock = NSLock()
-    private static var browserAccessibilityPreparedPIDs: Set<Int> = []
+    private static var browserAccessibilitySessionToken = 0
+    private static var browserAccessibilityPreviousValues: [Int: BrowserAccessibilityValues] = [:]
+
+    private struct BrowserAccessibilityValues {
+        let application: AXUIElement
+        let manualAccessibility: CFTypeRef?
+    }
 
     enum SnapMode: Int {
         case window
@@ -165,15 +171,19 @@ extension OverlayView {
         windowResult: WindowSnapResult,
         windowOrigin: NSPoint,
         viewBounds: NSRect,
-        screenH: CGFloat
-    ) -> WindowSnapResult {
-        guard AXIsProcessTrusted(), windowResult.ownerPID > 0 else { return windowResult }
+        screenH: CGFloat,
+        accessibilitySessionToken: Int
+    ) -> (result: WindowSnapResult, didPrepareBrowserAccessibility: Bool) {
+        guard AXIsProcessTrusted(), windowResult.ownerPID > 0 else {
+            return (windowResult, false)
+        }
 
         let application = AXUIElementCreateApplication(pid_t(windowResult.ownerPID))
         AXUIElementSetMessagingTimeout(application, 0.2)
-        prepareBrowserAccessibilityIfNeeded(
+        let didPrepareBrowserAccessibility = prepareBrowserAccessibilityIfNeeded(
             application: application,
-            ownerPID: windowResult.ownerPID)
+            ownerPID: windowResult.ownerPID,
+            sessionToken: accessibilitySessionToken)
 
         var hitElement: AXUIElement?
         let error = AXUIElementCopyElementAtPosition(
@@ -185,7 +195,7 @@ extension OverlayView {
               let axRect = deepestAccessibilityRect(
                 at: NSPoint(x: screenPoint.x, y: screenH - screenPoint.y),
                 from: hitElement)
-        else { return windowResult }
+        else { return (windowResult, didPrepareBrowserAccessibility) }
 
         let appKitRect = NSRect(
             x: axRect.origin.x,
@@ -199,16 +209,21 @@ extension OverlayView {
             height: appKitRect.height)
             .intersection(windowResult.rect)
             .intersection(viewBounds)
-        guard viewRect.width > 2, viewRect.height > 2 else { return windowResult }
+        guard viewRect.width > 2, viewRect.height > 2 else {
+            return (windowResult, didPrepareBrowserAccessibility)
+        }
 
-        return WindowSnapResult(
-            rect: viewRect,
-            windowID: windowResult.windowID,
-            ownerPID: windowResult.ownerPID)
+        return (
+            WindowSnapResult(
+                rect: viewRect,
+                windowID: windowResult.windowID,
+                ownerPID: windowResult.ownerPID),
+            didPrepareBrowserAccessibility)
     }
 
     private struct AccessibilityNodeInfo {
         let rect: NSRect?
+        let isHidden: Bool
         let children: [AXUIElement]
     }
 
@@ -229,10 +244,15 @@ extension OverlayView {
         var bestArea = CGFloat.greatestFiniteMagnitude
 
         while let current = pending.popLast(), visited.count < maxVisited {
-            if current.depth > 0 && CFAbsoluteTimeGetCurrent() >= deadline { break }
+            let remainingTime = deadline - CFAbsoluteTimeGetCurrent()
+            if current.depth > 0 && remainingTime <= 0 { break }
             let identity = CFHash(current.element)
             guard visited.insert(identity).inserted,
-                  let info = accessibilityNodeInfo(of: current.element)
+                  let info = accessibilityNodeInfo(
+                    of: current.element,
+                    messagingTimeout: Float(max(0.001, remainingTime)),
+                    maxChildren: maxChildrenPerNode),
+                  !info.isHidden
             else { continue }
 
             let containsPoint = info.rect?.contains(axPoint) ?? true
@@ -249,7 +269,7 @@ extension OverlayView {
                   CFAbsoluteTimeGetCurrent() < deadline
             else { continue }
 
-            for child in info.children.prefix(maxChildrenPerNode).reversed() {
+            for child in info.children.reversed() {
                 pending.append((child, current.depth + 1))
             }
         }
@@ -262,16 +282,28 @@ extension OverlayView {
     /// ignore the attributes. Attempt them once per target PID per capture session.
     private static func prepareBrowserAccessibilityIfNeeded(
         application: AXUIElement,
-        ownerPID: Int
-    ) {
+        ownerPID: Int,
+        sessionToken: Int
+    ) -> Bool {
         let defaults = UserDefaults.standard
         let enabled = defaults.object(forKey: browserElementSnapEnabledKey) as? Bool ?? true
-        guard enabled else { return }
+        guard enabled else { return false }
 
         browserAccessibilityLock.lock()
-        let shouldPrepare = browserAccessibilityPreparedPIDs.insert(ownerPID).inserted
-        browserAccessibilityLock.unlock()
-        guard shouldPrepare else { return }
+        guard sessionToken == browserAccessibilitySessionToken else {
+            browserAccessibilityLock.unlock()
+            return false
+        }
+        guard browserAccessibilityPreviousValues[ownerPID] == nil else {
+            browserAccessibilityLock.unlock()
+            return false
+        }
+
+        browserAccessibilityPreviousValues[ownerPID] = BrowserAccessibilityValues(
+            application: application,
+            manualAccessibility: accessibilityAttributeValue(
+                "AXManualAccessibility" as CFString,
+                of: application))
 
         // Chromium/Electron builds may report errors even when these values
         // successfully materialize the web-content accessibility tree.
@@ -283,20 +315,62 @@ extension OverlayView {
             application,
             "AXEnhancedUserInterface" as CFString,
             kCFBooleanTrue)
+        browserAccessibilityLock.unlock()
+        return true
+    }
+
+    static func currentBrowserAccessibilitySessionToken() -> Int {
+        browserAccessibilityLock.lock()
+        defer { browserAccessibilityLock.unlock() }
+        return browserAccessibilitySessionToken
     }
 
     static func resetBrowserAccessibilityPreparation() {
         browserAccessibilityLock.lock()
-        browserAccessibilityPreparedPIDs.removeAll()
+        browserAccessibilitySessionToken &+= 1
+        let previousValues = Array(browserAccessibilityPreviousValues.values)
+        browserAccessibilityPreviousValues.removeAll()
+
+        for values in previousValues {
+            AXUIElementSetAttributeValue(
+                values.application,
+                "AXManualAccessibility" as CFString,
+                values.manualAccessibility ?? kCFBooleanFalse)
+            // Chromium counts Enhanced UI enable/disable requests. A matching
+            // false removes only our request and preserves requests from other
+            // assistive clients; re-sending a previously observed true would
+            // add another request instead of restoring the prior state.
+            AXUIElementSetAttributeValue(
+                values.application,
+                "AXEnhancedUserInterface" as CFString,
+                kCFBooleanFalse)
+        }
         browserAccessibilityLock.unlock()
+    }
+
+    private static func accessibilityAttributeValue(
+        _ attribute: CFString,
+        of element: AXUIElement
+    ) -> CFTypeRef? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
+            return nil
+        }
+        return value
     }
 
     /// Fetch geometry and the common AX child collections in one IPC round trip.
     /// Some frameworks populate only one of these collections.
-    private static func accessibilityNodeInfo(of element: AXUIElement) -> AccessibilityNodeInfo? {
+    private static func accessibilityNodeInfo(
+        of element: AXUIElement,
+        messagingTimeout: Float,
+        maxChildren: Int
+    ) -> AccessibilityNodeInfo? {
+        AXUIElementSetMessagingTimeout(element, messagingTimeout)
         let attributes: [CFString] = [
             kAXPositionAttribute as CFString,
             kAXSizeAttribute as CFString,
+            kAXHiddenAttribute as CFString,
             kAXVisibleChildrenAttribute as CFString,
             "AXChildrenInNavigationOrder" as CFString,
             kAXChildrenAttribute as CFString,
@@ -309,14 +383,25 @@ extension OverlayView {
         else { return nil }
 
         let rect = accessibilityRect(positionValue: values[0], sizeValue: values[1])
+        let isHidden = values[2] as? Bool ?? false
+        let visibleChildren = values[3] as? [AXUIElement]
+        let childCollections: [[AXUIElement]]
+        if let visibleChildren, !visibleChildren.isEmpty {
+            childCollections = [visibleChildren]
+        } else {
+            childCollections = values.dropFirst(4).compactMap { $0 as? [AXUIElement] }
+        }
+
         var children: [AXUIElement] = []
-        for value in values.dropFirst(2) {
-            guard let elements = value as? [AXUIElement] else { continue }
-            for child in elements where !children.contains(where: { CFEqual($0, child) }) {
+        var childIdentities = Set<CFHashCode>()
+        collectionLoop: for elements in childCollections {
+            for child in elements.prefix(maxChildren) {
+                guard childIdentities.insert(CFHash(child)).inserted else { continue }
                 children.append(child)
+                if children.count == maxChildren { break collectionLoop }
             }
         }
-        return AccessibilityNodeInfo(rect: rect, children: children)
+        return AccessibilityNodeInfo(rect: rect, isHidden: isHidden, children: children)
     }
 
     private static func accessibilityRect(positionValue: Any, sizeValue: Any) -> NSRect? {

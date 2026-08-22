@@ -961,6 +961,7 @@ class OverlayView: NSView {
     var snappedWindowImage: NSImage? = nil
     private var snapQueryInFlight: Bool = false
     private var pendingSnapQueryPoint: NSPoint?
+    private var browserAccessibilityRetryWorkItems: [DispatchWorkItem] = []
 
     /// Find the window or accessibility element under the given AppKit screen point.
     private func querySnapTarget(at screenPoint: NSPoint) {
@@ -977,6 +978,9 @@ class OverlayView: NSView {
         let windowOrigin = viewWindow.frame.origin
         let viewBounds = bounds
         let screenH = NSScreen.screens.first?.frame.height ?? NSScreen.main?.frame.height ?? 0
+        let accessibilitySessionToken = requestedMode == .element
+            ? Self.currentBrowserAccessibilitySessionToken()
+            : 0
         snapQueryInFlight = true
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             let windowResult = Self.windowRectOnBackground(
@@ -987,13 +991,17 @@ class OverlayView: NSView {
                 screenH: screenH
             )
             let result: WindowSnapResult?
+            var didPrepareBrowserAccessibility = false
             if requestedMode == .element, let windowResult {
-                result = Self.elementSnapResult(
+                let elementResult = Self.elementSnapResult(
                     screenPoint: screenPoint,
                     windowResult: windowResult,
                     windowOrigin: windowOrigin,
                     viewBounds: viewBounds,
-                    screenH: screenH)
+                    screenH: screenH,
+                    accessibilitySessionToken: accessibilitySessionToken)
+                result = elementResult.result
+                didPrepareBrowserAccessibility = elementResult.didPrepareBrowserAccessibility
             } else {
                 result = windowResult
             }
@@ -1009,6 +1017,9 @@ class OverlayView: NSView {
                         self.needsDisplay = true
                     }
                 }
+                if didPrepareBrowserAccessibility {
+                    self.scheduleBrowserAccessibilityRetry()
+                }
                 if let pendingPoint = self.pendingSnapQueryPoint {
                     self.pendingSnapQueryPoint = nil
                     self.querySnapTarget(at: pendingPoint)
@@ -1016,6 +1027,22 @@ class OverlayView: NSView {
                     self.querySnapTarget(at: NSEvent.mouseLocation)
                 }
             }
+        }
+    }
+
+    private func scheduleBrowserAccessibilityRetry() {
+        for workItem in browserAccessibilityRetryWorkItems {
+            workItem.cancel()
+        }
+        browserAccessibilityRetryWorkItems = [0.1, 0.5, 2.1].map { delay in
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self, self.state == .idle, self.snapMode == .element,
+                      self.window?.isVisible == true
+                else { return }
+                self.querySnapTarget(at: NSEvent.mouseLocation)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            return workItem
         }
     }
 
@@ -10123,6 +10150,10 @@ class OverlayView: NSView {
         overlayErrorMessage = nil
         hoveredSnapRect = nil
         pendingSnapQueryPoint = nil
+        for workItem in browserAccessibilityRetryWorkItems {
+            workItem.cancel()
+        }
+        browserAccessibilityRetryWorkItems.removeAll()
         Self.resetBrowserAccessibilityPreparation()
         isRecording = false
         // Webcam setup preview (if any) — clear so a reused overlay doesn't
