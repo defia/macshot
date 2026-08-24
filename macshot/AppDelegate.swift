@@ -590,6 +590,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         appMenu.addItem(withTitle: "Quit macshot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
 
+        let fileMenuItem = NSMenuItem()
+        mainMenu.addItem(fileMenuItem)
+
+        let fileMenu = NSMenu(title: "File")
+        // Standard Close Window (Cmd+W) — routes to NSWindow.performClose(_:) via the
+        // responder chain, so it closes whichever window is key (editor, settings, etc.)
+        // without any window-specific handling.
+        fileMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileMenuItem.submenu = fileMenu
+
         let editMenuItem = NSMenuItem()
         mainMenu.addItem(editMenuItem)
 
