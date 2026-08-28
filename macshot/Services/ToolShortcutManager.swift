@@ -35,8 +35,6 @@ enum ToolShortcutManager {
         case invertColors
         case removeBackground
         case translate
-        case undo
-        case redo
 
         var label: String {
             switch self {
@@ -68,8 +66,6 @@ enum ToolShortcutManager {
             case .invertColors: return L("Invert Colors")
             case .removeBackground: return L("Remove Background")
             case .translate: return L("Translate")
-            case .undo: return L("Undo")
-            case .redo: return L("Redo")
             }
         }
 
@@ -103,8 +99,6 @@ enum ToolShortcutManager {
             case .invertColors: return ""
             case .removeBackground: return ""
             case .translate: return ""
-            case .undo: return ""
-            case .redo: return ""
             }
         }
     }
@@ -172,8 +166,6 @@ enum ToolShortcutManager {
             case .invertColors: lookup[k] = .invertColors
             case .removeBackground: lookup[k] = .removeBackground
             case .translate: lookup[k] = .translate
-            case .undo: lookup[k] = .undo
-            case .redo: lookup[k] = .redo
             }
         }
         _cachedLookup = lookup
@@ -222,8 +214,8 @@ enum ToolShortcutManager {
         case .invertColors: action = .invertColors
         case .removeBackground: action = .removeBackground
         case .translate: action = .translate
-        case .undo: action = .undo
-        case .redo: action = .redo
+        case .undo: return EditorCommandShortcutManager.displayString(for: .undo)
+        case .redo: return EditorCommandShortcutManager.displayString(for: .redo)
         case .loupe: action = .loupe
         case .moveSelection: action = .moveSelection
         default: action = nil

@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// Settings window that intercepts Cmd+Q to close itself instead of quitting the app.
 private class SettingsWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.contains(.command) && event.keyCode == 12 {  // Q
+        if KeyboardShortcutMatcher.matches(event, character: "q", modifiers: .command) {
             close()
             return true
         }
@@ -47,6 +47,9 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
     private var hotkeyFields: [HotkeyManager.HotkeySlot: NSTextField] = [:]
     private var hotkeyButtons: [HotkeyManager.HotkeySlot: NSButton] = [:]
     private var recordingSlot: HotkeyManager.HotkeySlot?
+    private var commandShortcutFields: [EditorCommandShortcutManager.Action: NSTextField] = [:]
+    private var commandShortcutButtons: [EditorCommandShortcutManager.Action: NSButton] = [:]
+    private var recordingCommandAction: EditorCommandShortcutManager.Action?
     private var toolShortcutFields: [ToolShortcutManager.Action: NSTextField] = [:]
     private var toolShortcutButtons: [ToolShortcutManager.Action: NSButton] = [:]
     private var showToolShortcutsInTooltipsCheckbox: NSButton!
@@ -141,6 +144,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
     private var languagePopup: NSPopUpButton!
 
     var onHotkeyChanged: (() -> Void)?
+    var onEditorCommandShortcutChanged: (() -> Void)?
 
     init() {
         let window = SettingsWindow(
@@ -1229,6 +1233,51 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         note.textColor = .secondaryLabelColor
         stack.addArrangedSubview(indented(note))
 
+        // ── Undo / Redo command shortcuts ───────────────────
+        stack.setCustomSpacing(20, after: stack.arrangedSubviews.last!)
+        stack.addArrangedSubview(sectionHeader("\(L("Undo")) / \(L("Redo"))"))
+        stack.setCustomSpacing(10, after: stack.arrangedSubviews.last!)
+
+        for action in EditorCommandShortcutManager.Action.allCases {
+            let index = EditorCommandShortcutManager.Action.allCases.firstIndex(of: action)!
+            let field = NSTextField()
+            field.isEditable = false
+            field.isSelectable = false
+            field.alignment = .center
+            field.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+            field.widthAnchor.constraint(equalToConstant: 100).isActive = true
+            field.stringValue = EditorCommandShortcutManager.displayString(for: action)
+
+            let button = NSButton(title: L("Set"), target: self, action: #selector(recordCommandShortcut(_:)))
+            button.bezelStyle = .rounded
+            button.tag = index
+
+            let clearButton = NSButton(title: "", target: self, action: #selector(clearCommandShortcut(_:)))
+            clearButton.bezelStyle = .inline
+            clearButton.isBordered = false
+            clearButton.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: L("None"))
+            clearButton.contentTintColor = .secondaryLabelColor
+            clearButton.imagePosition = .imageOnly
+            clearButton.tag = index
+            clearButton.toolTip = L("None")
+            clearButton.widthAnchor.constraint(equalToConstant: 20).isActive = true
+
+            let resetButton = NSButton(title: "", target: self, action: #selector(resetCommandShortcut(_:)))
+            resetButton.bezelStyle = .inline
+            resetButton.isBordered = false
+            resetButton.image = NSImage(systemSymbolName: "arrow.counterclockwise.circle.fill", accessibilityDescription: L("Reset to default"))
+            resetButton.contentTintColor = .secondaryLabelColor
+            resetButton.imagePosition = .imageOnly
+            resetButton.tag = index
+            resetButton.toolTip = L("Reset to default")
+            resetButton.widthAnchor.constraint(equalToConstant: 20).isActive = true
+
+            commandShortcutFields[action] = field
+            commandShortcutButtons[action] = button
+            stack.addArrangedSubview(labeledRow("\(action.label):", controls: [field, button, clearButton, resetButton]))
+            stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
+        }
+
         // ── Overlay / Editor Tool Shortcuts ──────────────────
         stack.setCustomSpacing(20, after: stack.arrangedSubviews.last!)
         stack.addArrangedSubview(sectionHeader(L("Overlay / Editor Shortcuts")))
@@ -1313,8 +1362,9 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
             stopShortcutRecording()
             return
         }
-        // Stop any previous recording (global or tool)
+        // Stop any previous recording.
         stopShortcutRecording()
+        stopCommandShortcutRecording()
         stopToolShortcutRecording()
 
         recordingSlot = slot
@@ -1323,6 +1373,10 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
 
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
+            if event.keyCode == 53 {
+                self.stopShortcutRecording()
+                return nil
+            }
             let modifiers = event.modifierFlags
             var carbonMods: UInt32 = 0
             if modifiers.contains(.command) { carbonMods |= UInt32(cmdKey) }
@@ -1364,6 +1418,77 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
     }
 
+    // MARK: - Editor Command Shortcuts
+
+    @objc private func recordCommandShortcut(_ sender: NSButton) {
+        let actions = EditorCommandShortcutManager.Action.allCases
+        guard sender.tag >= 0, sender.tag < actions.count else { return }
+        let action = actions[sender.tag]
+        if recordingCommandAction == action {
+            stopCommandShortcutRecording()
+            return
+        }
+
+        stopShortcutRecording()
+        stopCommandShortcutRecording()
+        stopToolShortcutRecording()
+        recordingCommandAction = action
+        sender.title = L("Press keys...")
+        commandShortcutFields[action]?.stringValue = L("Waiting...")
+
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            if event.keyCode == 53 {
+                self.stopCommandShortcutRecording()
+                return nil
+            }
+            let modifiers = KeyboardShortcutMatcher.modifiers(in: event)
+            // Editor commands are menu key equivalents, so require Command;
+            // Shift/Option/Control may be added to distinguish the chord.
+            guard modifiers.contains(.command),
+                  let character = KeyboardShortcutMatcher.semanticCharacter(for: event) else {
+                return nil
+            }
+            let shortcut = EditorCommandShortcutManager.Shortcut(
+                character: character,
+                modifiers: modifiers)
+            EditorCommandShortcutManager.setShortcut(shortcut, for: action)
+            self.stopCommandShortcutRecording()
+            self.refreshShortcutDisplaysForKeyboardLayout()
+            self.onEditorCommandShortcutChanged?()
+            return nil
+        }
+    }
+
+    @objc private func clearCommandShortcut(_ sender: NSButton) {
+        let actions = EditorCommandShortcutManager.Action.allCases
+        guard sender.tag >= 0, sender.tag < actions.count else { return }
+        let action = actions[sender.tag]
+        stopCommandShortcutRecording()
+        EditorCommandShortcutManager.disable(action)
+        commandShortcutFields[action]?.stringValue = L("None")
+        onEditorCommandShortcutChanged?()
+    }
+
+    @objc private func resetCommandShortcut(_ sender: NSButton) {
+        let actions = EditorCommandShortcutManager.Action.allCases
+        guard sender.tag >= 0, sender.tag < actions.count else { return }
+        let action = actions[sender.tag]
+        stopCommandShortcutRecording()
+        EditorCommandShortcutManager.reset(action)
+        commandShortcutFields[action]?.stringValue = EditorCommandShortcutManager.displayString(for: action)
+        onEditorCommandShortcutChanged?()
+    }
+
+    private func stopCommandShortcutRecording() {
+        if let action = recordingCommandAction {
+            commandShortcutFields[action]?.stringValue = EditorCommandShortcutManager.displayString(for: action)
+            commandShortcutButtons[action]?.title = L("Set")
+        }
+        recordingCommandAction = nil
+        if let monitor = localMonitor { NSEvent.removeMonitor(monitor); localMonitor = nil }
+    }
+
     // MARK: - Overlay Tool Shortcuts
 
     @objc private func recordToolShortcut(_ sender: NSButton) {
@@ -1376,8 +1501,9 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
             stopToolShortcutRecording()
             return
         }
-        // Stop any other recording (global or tool)
+        // Stop any other recording.
         stopShortcutRecording()
+        stopCommandShortcutRecording()
         stopToolShortcutRecording()
 
         recordingToolAction = action
@@ -1394,8 +1520,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
             guard !event.modifierFlags.contains(.command),
                   !event.modifierFlags.contains(.option),
                   !event.modifierFlags.contains(.control),
-                  let char = event.charactersIgnoringModifiers?.lowercased(),
-                  char.count == 1 else { return nil }
+                  let char = KeyboardShortcutMatcher.semanticCharacter(for: event) else { return nil }
 
             ToolShortcutManager.setKey(char, for: action)
             self.toolShortcutFields[action]?.stringValue = ToolShortcutManager.displayString(for: action)
@@ -2378,11 +2503,18 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
 
     // MARK: - Load settings
 
-    private func loadSettings() {
-        // Load shortcut fields
+    func refreshShortcutDisplaysForKeyboardLayout() {
         for slot in HotkeyManager.HotkeySlot.allCases {
             hotkeyFields[slot]?.stringValue = HotkeyManager.displayString(for: slot)
         }
+        for action in EditorCommandShortcutManager.Action.allCases {
+            commandShortcutFields[action]?.stringValue = EditorCommandShortcutManager.displayString(for: action)
+        }
+    }
+
+    private func loadSettings() {
+        // Load shortcut fields
+        refreshShortcutDisplaysForKeyboardLayout()
 
         savePathField.stringValue = SaveDirectoryAccess.displayPath
         selectSaveAction(SaveActionPreference.current)
@@ -3132,6 +3264,9 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
     }
 
     func windowWillClose(_ notification: Notification) {
+        stopShortcutRecording()
+        stopCommandShortcutRecording()
+        stopToolShortcutRecording()
         (NSApp.delegate as? AppDelegate)?.returnFocusIfNeeded()
     }
 }

@@ -290,6 +290,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         updaterController.updater.automaticallyDownloadsUpdates = false
         setupMainMenu()
         setupStatusBar()
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(keyboardInputSourceDidChange),
+            name: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+            object: nil)
         if UserDefaults.standard.bool(forKey: "hideMenuBarIcon") {
             setMenuBarIconVisible(false)
         }
@@ -553,6 +558,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         }
         overlayControllerPool.removeAll()
         HotkeyManager.shared.unregister()
+        DistributedNotificationCenter.default().removeObserver(self)
         if macshotSignalLogFd >= 0 {
             close(macshotSignalLogFd)
             macshotSignalLogFd = -1
@@ -594,8 +600,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         mainMenu.addItem(editMenuItem)
 
         let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        let undoItem = NSMenuItem(title: L("Undo"), action: Selector(("undo:")), keyEquivalent: "")
+        EditorCommandShortcutManager.applyPrimaryMenuShortcut(for: .undo, to: undoItem)
+        editMenu.addItem(undoItem)
+        let redoItem = NSMenuItem(title: L("Redo"), action: Selector(("redo:")), keyEquivalent: "")
+        EditorCommandShortcutManager.applyPrimaryMenuShortcut(for: .redo, to: redoItem)
+        editMenu.addItem(redoItem)
         editMenu.addItem(NSMenuItem.separator())
         editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
@@ -1500,6 +1510,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         openSettings()
     }
 
+    @objc private func keyboardInputSourceDidChange() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.rebuildStatusBarMenu()
+            self.settingsController?.refreshShortcutDisplaysForKeyboardLayout()
+        }
+    }
+
     @objc private func spaceDidChange() {
         guard !overlayControllers.isEmpty else { return }
         dismissOverlays()
@@ -2244,6 +2262,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             settingsController?.onHotkeyChanged = { [weak self] in
                 self?.registerHotkey()
                 self?.rebuildStatusBarMenu()
+            }
+            settingsController?.onEditorCommandShortcutChanged = { [weak self] in
+                self?.setupMainMenu()
             }
         }
         settingsController?.showWindow()

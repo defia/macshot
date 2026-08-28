@@ -7322,21 +7322,20 @@ class OverlayView: NSView {
     }
 
     private func eventMatchesToolShortcut(_ event: NSEvent, action: ToolShortcutManager.Action) -> Bool {
-        guard !event.modifierFlags.contains(.command),
-              !event.modifierFlags.contains(.option),
-              !event.modifierFlags.contains(.control),
-              let char = event.charactersIgnoringModifiers?.lowercased()
-        else { return false }
+        let modifiers = KeyboardShortcutMatcher.modifiers(in: event)
+        guard !modifiers.contains(.command),
+              !modifiers.contains(.option),
+              !modifiers.contains(.control) else { return false }
         let shortcut = ToolShortcutManager.key(for: action).lowercased()
-        return !shortcut.isEmpty && char == shortcut
+        return !shortcut.isEmpty && KeyboardShortcutMatcher.toolCharacters(for: event).contains(shortcut)
     }
 
     private func eventEndsKeyboardMoveSelection(_ event: NSEvent) -> Bool {
         if keyboardMoveSelectionShortcut == " " {
             return event.keyCode == 49
         }
-        guard let char = event.charactersIgnoringModifiers?.lowercased() else { return false }
-        return !keyboardMoveSelectionShortcut.isEmpty && char == keyboardMoveSelectionShortcut
+        return !keyboardMoveSelectionShortcut.isEmpty
+            && KeyboardShortcutMatcher.toolCharacters(for: event).contains(keyboardMoveSelectionShortcut)
     }
 
     private func canStartKeyboardMoveSelection() -> Bool {
@@ -8834,99 +8833,79 @@ class OverlayView: NSView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        // Forward Cmd shortcuts to the text view when editing — the main menu
-        // intercepts these before keyDown reaches the overlay window.
-        // Use keyCode (hardware-based) instead of charactersIgnoringModifiers
-        // so shortcuts work regardless of keyboard layout (e.g. Russian, Arabic).
-        if event.modifierFlags.contains(.command) {
-            let key = event.keyCode
-            // Text editing: forward to NSTextView (only when text is actively selected)
-            if let tv = textEditView {
-                switch key {
-                case 8:  // C
-                    if tv.selectedRange().length > 0 {
-                        tv.copy(nil)
-                    } else {
-                        // No text selected — commit, copy annotation, then deselect
-                        // so the purple selection chrome doesn't flash
-                        commitTextFieldIfNeeded()
-                        if selectedAnnotations.isEmpty, let last = annotations.last, last.tool == .text {
-                            selectedAnnotation = last
-                        }
-                        copySelectedAnnotations()
-                        selectedAnnotations = []
-                        needsDisplay = true
-                    }
-                    return true
-                case 9:  // V
-                    if NSPasteboard.general.data(forType: Self.annotationPasteboardType) != nil {
-                        commitTextFieldIfNeeded()
-                        pasteAnnotations()
-                        selectedAnnotations = []
-                        needsDisplay = true
-                    } else if NSPasteboard.general.canReadObject(forClasses: [NSString.self], options: nil) {
-                        // Clipboard has text — paste it into the text field.
-                        tv.paste(nil)
-                    } else if isEditorMode {
-                        // No text, but an image may be present — commit the text edit
-                        // and paste the image as a stamp (mirrors "Add Capture").
-                        commitTextFieldIfNeeded()
-                        _ = pasteImageFromClipboard()
-                    } else {
-                        tv.paste(nil)
-                    }
-                    return true
-                case 7: tv.cut(nil); return true  // X
-                case 0: tv.selectAll(nil); return true  // A
-                case 6:  // Z
-                    if event.modifierFlags.contains(.shift) { tv.undoManager?.redo() }
-                    else { tv.undoManager?.undo() }
-                    return true
-                default: break
-                }
+        // Text editing: forward standard commands to the active text view.
+        if let tv = textEditView {
+            if let action = EditorCommandShortcutManager.action(for: event) {
+                if action == .undo { tv.undoManager?.undo() } else { tv.undoManager?.redo() }
+                return true
             }
-
-            // Annotation copy/paste (no text editing active)
-            if state == .selected {
-                switch key {
-                case 8:  // C
-                    if !selectedAnnotations.isEmpty {
-                        copySelectedAnnotations()
-                    } else {
-                        overlayDelegate?.overlayViewDidConfirm()
+            if KeyboardShortcutMatcher.matches(event, character: "c", modifiers: .command) {
+                if tv.selectedRange().length > 0 {
+                    tv.copy(nil)
+                } else {
+                    // No text selected — commit, copy annotation, then deselect
+                    // so the purple selection chrome doesn't flash.
+                    commitTextFieldIfNeeded()
+                    if selectedAnnotations.isEmpty, let last = annotations.last, last.tool == .text {
+                        selectedAnnotation = last
                     }
-                    return true
-                case 9:  // V
-                    if NSPasteboard.general.data(forType: Self.annotationPasteboardType) != nil {
-                        pasteAnnotations()
-                        return true
-                    }
-                    // Editor only: fall back to pasting a clipboard image as a stamp
-                    // placed below the canvas (mirrors "Add Capture").
-                    if pasteImageFromClipboard() {
-                        return true
-                    }
-                case 2:  // D — duplicate in place, without touching the clipboard
-                    if !selectedAnnotations.isEmpty {
-                        duplicateSelectedAnnotations()
-                        return true
-                    }
-                default: break
+                    copySelectedAnnotations()
+                    selectedAnnotations = []
+                    needsDisplay = true
                 }
+                return true
             }
-
-            // Canvas undo/redo — intercept before main menu consumes the event
-            if state == .selected {
-                switch key {
-                case 6:  // Z
-                    if event.modifierFlags.contains(.shift) { redo() }
-                    else { undo() }
-                    return true
-                case 16:  // Y
-                    redo()
-                    return true
-                default: break
+            if KeyboardShortcutMatcher.matches(event, character: "v", modifiers: .command) {
+                if NSPasteboard.general.data(forType: Self.annotationPasteboardType) != nil {
+                    commitTextFieldIfNeeded()
+                    pasteAnnotations()
+                    selectedAnnotations = []
+                    needsDisplay = true
+                } else if NSPasteboard.general.canReadObject(forClasses: [NSString.self], options: nil) {
+                    tv.paste(nil)
+                } else if isEditorMode {
+                    commitTextFieldIfNeeded()
+                    _ = pasteImageFromClipboard()
+                } else {
+                    tv.paste(nil)
                 }
+                return true
+            }
+            if KeyboardShortcutMatcher.matches(event, character: "x", modifiers: .command) {
+                tv.cut(nil)
+                return true
+            }
+            if KeyboardShortcutMatcher.matches(event, character: "a", modifiers: .command) {
+                tv.selectAll(nil)
+                return true
+            }
+        }
+
+        // Annotation copy/paste/duplicate (no text editing active).
+        if state == .selected {
+            if KeyboardShortcutMatcher.matches(event, character: "c", modifiers: .command) {
+                if !selectedAnnotations.isEmpty {
+                    copySelectedAnnotations()
+                } else {
+                    overlayDelegate?.overlayViewDidConfirm()
+                }
+                return true
+            }
+            if KeyboardShortcutMatcher.matches(event, character: "v", modifiers: .command) {
+                if NSPasteboard.general.data(forType: Self.annotationPasteboardType) != nil {
+                    pasteAnnotations()
+                    return true
+                }
+                if pasteImageFromClipboard() { return true }
+            }
+            if KeyboardShortcutMatcher.matches(event, character: "d", modifiers: .command),
+               !selectedAnnotations.isEmpty {
+                duplicateSelectedAnnotations()
+                return true
+            }
+            if let action = EditorCommandShortcutManager.action(for: event) {
+                if action == .undo { undo() } else { redo() }
+                return true
             }
         }
         return super.performKeyEquivalent(with: event)
@@ -8937,6 +8916,24 @@ class OverlayView: NSView {
         if isRecording {
             if event.keyCode == 53 { // Escape
                 handleToolbarAction(.stopRecord)
+            }
+            return
+        }
+
+        // Character-based so the shortcut follows QWERTZ/AZERTY/Dvorak.
+        if state == .idle && windowSnapEnabled
+            && KeyboardShortcutMatcher.matches(event, character: "f", modifiers: [])
+        {
+            selectionRect = bounds
+            state = .selected
+            hoveredWindowRect = nil
+            if autoQuickSaveMode {
+                autoQuickSaveMode = false
+                overlayDelegate?.overlayViewDidRequestQuickSave()
+            } else {
+                showToolbars = true
+                overlayDelegate?.overlayViewDidFinishSelection(selectionRect)
+                needsDisplay = true
             }
             return
         }
@@ -9032,20 +9029,6 @@ class OverlayView: NSView {
                 // Notify other overlays to redraw (for multi-monitor setups)
                 overlayDelegate?.overlayViewDidChangeWindowSnapState()
             }
-        case 3:  // F — full screen capture (only in idle state with snap on)
-            if state == .idle && windowSnapEnabled {
-                selectionRect = bounds
-                state = .selected
-                hoveredWindowRect = nil
-                if autoQuickSaveMode {
-                    autoQuickSaveMode = false
-                    overlayDelegate?.overlayViewDidRequestQuickSave()
-                } else {
-                    showToolbars = true
-                    overlayDelegate?.overlayViewDidFinishSelection(selectionRect)
-                    needsDisplay = true
-                }
-            }
         case 36, 76:  // Return / numpad Enter — quick capture (respects quickCaptureMode setting)
             if textEditView == nil, state == .selected {
                 overlayDelegate?.overlayViewDidRequestQuickSave()
@@ -9082,8 +9065,11 @@ class OverlayView: NSView {
             if state == .selected && textEditView == nil && !event.modifierFlags.contains(.command)
                 && !event.modifierFlags.contains(.option) && !event.modifierFlags.contains(.control)
             {
-                if let char = event.charactersIgnoringModifiers?.lowercased(),
-                   let action = ToolShortcutManager.lookupAction(for: char) {
+                let action = KeyboardShortcutMatcher.toolCharacters(for: event)
+                    .lazy
+                    .compactMap { ToolShortcutManager.lookupAction(for: $0) }
+                    .first
+                if let action {
                     switch action {
                     case .moveSelection:
                         if !isKeyboardMoveSelectionActive {
@@ -9100,16 +9086,19 @@ class OverlayView: NSView {
                 }
             }
             if event.modifierFlags.contains(.command) {
-                // Cmd+C, Cmd+V, Cmd+X, Cmd+A, Cmd+Z are handled in performKeyEquivalent.
+                // Editing and history commands are handled in performKeyEquivalent.
                 // Only Cmd+S and zoom shortcuts remain here.
-                // Use keyCode for letters so shortcuts work with any keyboard layout.
-                if event.keyCode == 1 {  // S
+                if KeyboardShortcutMatcher.matches(event, character: "s", modifiers: .command) {
                     if state == .selected {
                         overlayDelegate?.overlayViewDidRequestSave()
                     }
                     return
                 }
-                if event.charactersIgnoringModifiers == "0" {
+                let commandModifiers = KeyboardShortcutMatcher.modifiers(in: event)
+                let isCommandCharacter = commandModifiers == .command
+                    || commandModifiers == [.command, .shift]
+                let commandCharacter = KeyboardShortcutMatcher.semanticCharacter(for: event)
+                if isCommandCharacter && commandCharacter == "0" {
                     // Cmd+0 resets zoom in the editor only; the capture overlay
                     // doesn't zoom.
                     if isInsideScrollView, let sv = enclosingScrollView {
@@ -9119,7 +9108,7 @@ class OverlayView: NSView {
                     return
                 }
                 if isInsideScrollView {
-                    if event.charactersIgnoringModifiers == "=" || event.charactersIgnoringModifiers == "+" {
+                    if isCommandCharacter && (commandCharacter == "=" || commandCharacter == "+") {
                         if let sv = enclosingScrollView, let doc = sv.documentView {
                             let newMag = min(sv.maxMagnification, sv.magnification * 1.25)
                             sv.setMagnification(newMag, centeredAt: NSPoint(x: doc.bounds.midX, y: doc.bounds.midY))
@@ -9127,7 +9116,7 @@ class OverlayView: NSView {
                         }
                         return
                     }
-                    if event.charactersIgnoringModifiers == "-" {
+                    if isCommandCharacter && commandCharacter == "-" {
                         if let sv = enclosingScrollView, let doc = sv.documentView {
                             let newMag = max(sv.minMagnification, sv.magnification / 1.25)
                             sv.setMagnification(newMag, centeredAt: NSPoint(x: doc.bounds.midX, y: doc.bounds.midY))
@@ -9135,7 +9124,7 @@ class OverlayView: NSView {
                         }
                         return
                     }
-                    if event.charactersIgnoringModifiers == "1" {
+                    if isCommandCharacter && commandCharacter == "1" {
                         if let sv = enclosingScrollView, let doc = sv.documentView {
                             let unscaledW = doc.frame.width / sv.magnification
                             let unscaledH = doc.frame.height / sv.magnification

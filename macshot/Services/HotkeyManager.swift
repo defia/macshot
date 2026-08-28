@@ -286,7 +286,7 @@ class HotkeyManager {
         // Character keys: a virtual keycode identifies a physical key position,
         // and on Dvorak/Colemak/etc. that position types a different character
         // than on QWERTY — so the display must go through the active layout.
-        if let translated = layoutCharacter(for: keyCode) {
+        if let translated = KeyboardShortcutMatcher.currentLayoutCharacter(for: keyCode) {
             // Uppercase for display, but only when it doesn't change length
             // ("ß".uppercased() == "SS" — keep the original there).
             let upper = translated.uppercased()
@@ -315,26 +315,6 @@ class HotkeyManager {
 
     /// Character produced by `keyCode` under the current keyboard layout, or
     /// nil when the layout has no printable mapping for it.
-    private static func layoutCharacter(for keyCode: UInt32) -> String? {
-        guard let inputSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
-              let layoutPtr = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else { return nil }
-        let layoutData = Unmanaged<CFData>.fromOpaque(layoutPtr).takeUnretainedValue() as Data
-        var deadKeyState: UInt32 = 0
-        var chars = [UniChar](repeating: 0, count: 4)
-        var length: Int = 0
-        layoutData.withUnsafeBytes { rawBuf in
-            guard let ptr = rawBuf.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return }
-            UCKeyTranslate(ptr, UInt16(keyCode), UInt16(kUCKeyActionDown), 0, UInt32(LMGetKbdType()),
-                           UInt32(kUCKeyTranslateNoDeadKeysBit), &deadKeyState, 4, &length, &chars)
-        }
-        guard length > 0 else { return nil }
-        let str = String(utf16CodeUnits: chars, count: length)
-        guard !str.isEmpty, str != "\0",
-              str.rangeOfCharacter(from: .controlCharacters) == nil,
-              str.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return nil }
-        return str
-    }
-
     /// NSMenuItem-compatible Unicode character for special keys that can't
     /// simply be lowercased from keyString(). Letters and digits are handled
     /// by lowercasing keyString() directly.
@@ -367,7 +347,7 @@ class HotkeyManager {
         let key: String
         if let special = menuKeyCharMap[keyCode] {
             key = special
-        } else if let raw = layoutCharacter(for: keyCode), raw.count == 1 {
+        } else if let raw = KeyboardShortcutMatcher.currentLayoutCharacter(for: keyCode), raw.count == 1 {
             key = raw.lowercased()
         } else {
             let display = keyString(from: keyCode)
@@ -388,6 +368,10 @@ class HotkeyManager {
     /// Apply the configured hotkey for a slot to an NSMenuItem (if one is set).
     static func applyMenuShortcut(for slot: HotkeySlot, to item: NSMenuItem) {
         if let equiv = menuKeyEquivalent(for: slot) {
+            // This shortcut is stored as a physical Carbon key code and has
+            // already been translated for the active layout. Letting AppKit
+            // localize it again would remap it twice on Dvorak/AZERTY/etc.
+            item.allowsAutomaticKeyEquivalentLocalization = false
             item.keyEquivalent = equiv.key
             item.keyEquivalentModifierMask = equiv.modifiers
         }
