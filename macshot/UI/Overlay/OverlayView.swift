@@ -1313,6 +1313,14 @@ class OverlayView: NSView {
             return
         }
 
+        // The color sampler always acts on the rendered canvas, including over
+        // existing annotations. Do not let annotation hover hit-testing replace
+        // its crosshair with manipulation cursors such as the open hand.
+        if currentTool == .colorSampler {
+            NSCursor.crosshair.set()
+            return
+        }
+
         // Annotation control cursors (resize handles, rotation, delete, body)
         if state == .selected && !isDraggingAnnotation && !isResizingAnnotation && !isRotatingAnnotation {
             // Check selected annotation's handles first
