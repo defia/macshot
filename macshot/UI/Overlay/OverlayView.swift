@@ -3355,10 +3355,9 @@ class OverlayView: NSView {
 
     // MARK: - Color Sampler Preview
 
-    /// Sample the pixel color at `canvasPoint` from the screenshot and draw a live preview.
+    /// Sample the visible canvas color at `canvasPoint` and draw a live preview.
     private func drawColorSamplerPreview(at canvasPoint: NSPoint) {
-        guard let screenshot = screenshotImage else { return }
-        guard let result = sampleColor(from: screenshot, at: canvasPoint) else { return }
+        guard let result = sampleCanvasColor(at: canvasPoint) else { return }
         let sampledColor = result.color
         let hexStr = result.hex
 
@@ -3415,7 +3414,16 @@ class OverlayView: NSView {
         context.restoreGraphicsState()
     }
 
-    /// Sample a pixel color from the screenshot at the given canvas-space point.
+    /// Sample the rendered canvas without transient UI chrome. Committed annotations
+    /// are included, while selection handles, toolbars, and this preview are not.
+    private func sampleCanvasColor(at canvasPoint: NSPoint) -> (
+        color: NSColor, hex: String
+    )? {
+        guard let image = compositedImage() ?? screenshotImage else { return nil }
+        return sampleColor(from: image, at: canvasPoint)
+    }
+
+    /// Sample a pixel color from an image at the given canvas-space point.
     /// Returns (NSColor for display, hex string with raw sRGB values matching what other tools report).
     private func sampleColor(from image: NSImage, at canvasPoint: NSPoint) -> (
         color: NSColor, hex: String
@@ -5488,9 +5496,7 @@ class OverlayView: NSView {
         if event.modifierFlags.contains(.control) && state == .selected
             && currentTool == .colorSampler
         {
-            if let screenshot = screenshotImage,
-                let result = sampleColor(from: screenshot, at: viewToCanvas(point))
-            {
+            if let result = sampleCanvasColor(at: viewToCanvas(point)) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(result.hex, forType: .string)
                 showOverlayError(String(format: L("Copied %@"), result.hex))
@@ -6889,9 +6895,7 @@ class OverlayView: NSView {
 
         if state == .selected && currentTool == .colorSampler {
             // Right-click with color sampler: copy hex to clipboard
-            if let screenshot = screenshotImage,
-                let result = sampleColor(from: screenshot, at: viewToCanvas(point))
-            {
+            if let result = sampleCanvasColor(at: viewToCanvas(point)) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(result.hex, forType: .string)
                 showOverlayError(String(format: L("Copied %@"), result.hex))
@@ -8363,9 +8367,7 @@ class OverlayView: NSView {
         // Color sampler: click sets the current drawing color, no annotation created.
         // Note: point is already in canvas space (converted by caller).
         if currentTool == .colorSampler {
-            if let screenshot = screenshotImage,
-                let result = sampleColor(from: screenshot, at: point)
-            {
+            if let result = sampleCanvasColor(at: point) {
                 currentColor = result.color
                 currentColorOpacity = 1.0
                 OverlayView.lastUsedOpacity = 1.0
