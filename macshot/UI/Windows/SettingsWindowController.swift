@@ -129,7 +129,8 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
     private var recSavePathField: NSTextField!
     // Webcam controls
     private var webcamPositionPopup: NSPopUpButton!
-    private var webcamSizePopup: NSPopUpButton!
+    private var webcamSizeSlider: NSSlider!
+    private var webcamSizeLabel: NSTextField!
     private var webcamShapePopup: NSPopUpButton!
     // Scroll capture controls
     private var scrollAutoScrollCheckbox: NSButton!
@@ -1632,11 +1633,22 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         stack.addArrangedSubview(labeledRow(L("Position:"), controls: [webcamPositionPopup]))
         stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
 
-        webcamSizePopup = NSPopUpButton()
-        webcamSizePopup.addItems(withTitles: [L("Webcam Size Small"), L("Webcam Size Medium"), L("Webcam Size Large"), L("Webcam Size Extra Large")])
-        webcamSizePopup.target = self
-        webcamSizePopup.action = #selector(webcamSizeChanged(_:))
-        stack.addArrangedSubview(labeledRow(L("Size:"), controls: [webcamSizePopup]))
+        webcamSizeSlider = NSSlider(
+            value: Double(WebcamSize.savedPoints),
+            minValue: Double(WebcamSize.minPoints),
+            maxValue: Double(WebcamSize.maxPoints),
+            target: self, action: #selector(webcamSizeChanged(_:)))
+        webcamSizeSlider.isContinuous = true
+        webcamSizeSlider.translatesAutoresizingMaskIntoConstraints = false
+        webcamSizeSlider.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        webcamSizeLabel = NSTextField(labelWithString: "")
+        webcamSizeLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        webcamSizeLabel.alignment = .right
+        webcamSizeLabel.translatesAutoresizingMaskIntoConstraints = false
+        webcamSizeLabel.widthAnchor.constraint(equalToConstant: 52).isActive = true
+        updateWebcamSizeLabel()
+        stack.addArrangedSubview(labeledRow(
+            L("Size:"), controls: [webcamSizeSlider, webcamSizeLabel]))
         stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
 
         webcamShapePopup = NSPopUpButton()
@@ -2502,14 +2514,8 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         default: webcamPositionPopup.selectItem(at: 0)
         }
 
-        let webcamSize = UserDefaults.standard.string(forKey: "webcamSize") ?? "medium"
-        switch webcamSize {
-        case "small": webcamSizePopup.selectItem(at: 0)
-        case "medium": webcamSizePopup.selectItem(at: 1)
-        case "large": webcamSizePopup.selectItem(at: 2)
-        case "xlarge": webcamSizePopup.selectItem(at: 3)
-        default: webcamSizePopup.selectItem(at: 1)
-        }
+        webcamSizeSlider.doubleValue = Double(WebcamSize.savedPoints)
+        updateWebcamSizeLabel()
 
         webcamShapePopup.selectItem(at: (UserDefaults.standard.string(forKey: "webcamShape") ?? "circle") == "roundedRect" ? 1 : 0)
 
@@ -2692,9 +2698,14 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         UserDefaults.standard.set(values[sender.indexOfSelectedItem], forKey: "webcamPosition")
     }
 
-    @objc private func webcamSizeChanged(_ sender: NSPopUpButton) {
-        let values = ["small", "medium", "large", "xlarge"]
-        UserDefaults.standard.set(values[sender.indexOfSelectedItem], forKey: "webcamSize")
+    @objc private func webcamSizeChanged(_ sender: NSSlider) {
+        WebcamSize.save(points: CGFloat(sender.doubleValue))
+        sender.doubleValue = Double(WebcamSize.savedPoints)
+        updateWebcamSizeLabel()
+    }
+
+    private func updateWebcamSizeLabel() {
+        webcamSizeLabel?.stringValue = "\(Int(WebcamSize.savedPoints)) px"
     }
 
     @objc private func webcamShapeChanged(_ sender: NSPopUpButton) {

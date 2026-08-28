@@ -3342,6 +3342,17 @@ class OverlayView: NSView {
         }
     }
 
+    /// Apply the Beautify enabled state consistently regardless of which UI control changed it.
+    func setBeautifyEnabled(_ enabled: Bool) {
+        guard beautifyEnabled != enabled else { return }
+        beautifyEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "beautifyEnabled")
+        cachedCompositedImage = nil
+        startBeautifyToolbarAnimation()
+        needsDisplay = true
+        onContentChanged?()
+    }
+
     // MARK: - Color Sampler Preview
 
     /// Sample the pixel color at `canvasPoint` from the screenshot and draw a live preview.
@@ -7761,18 +7772,7 @@ class OverlayView: NSView {
         guard let screen = window?.screen ?? NSScreen.main else { return }
 
         let overlay = WebcamOverlay(screen: screen)
-        let position = WebcamPosition(rawValue: UserDefaults.standard.string(forKey: "webcamPosition") ?? "bottomRight") ?? .bottomRight
-        let size = WebcamSize(rawValue: UserDefaults.standard.string(forKey: "webcamSize") ?? "medium") ?? .medium
-        let shape = WebcamShape(rawValue: UserDefaults.standard.string(forKey: "webcamShape") ?? "circle") ?? .circle
-
-        let screenOrigin = screen.frame.origin
-        let screenRect = NSRect(
-            x: selectionRect.origin.x + screenOrigin.x,
-            y: selectionRect.origin.y + screenOrigin.y,
-            width: selectionRect.width,
-            height: selectionRect.height)
-
-        overlay.configure(position: position, size: size, shape: shape, recordingRect: screenRect)
+        configureWebcamSetupPreview(overlay, on: screen)
         overlay.startPreview(deviceUID: UserDefaults.standard.string(forKey: "selectedCameraDeviceUID"))
         overlay.setDraggable(true)
         overlay.orderFront(nil)
@@ -7793,19 +7793,20 @@ class OverlayView: NSView {
     }
 
     func updateWebcamSetupPreview() {
-        guard webcamSetupPreview != nil else { return }
-        dismissWebcamSetupPreview()
-        if UserDefaults.standard.bool(forKey: "recordWebcam") {
-            showWebcamSetupPreview()
-        }
+        guard let overlay = webcamSetupPreview,
+              let screen = window?.screen ?? NSScreen.main else { return }
+        configureWebcamSetupPreview(overlay, on: screen)
     }
 
     /// Reposition the webcam preview to follow the current selection without restarting the camera.
     private func repositionWebcamSetupPreview() {
         guard let overlay = webcamSetupPreview,
               let screen = window?.screen ?? NSScreen.main else { return }
+        configureWebcamSetupPreview(overlay, on: screen)
+    }
+
+    private func configureWebcamSetupPreview(_ overlay: WebcamOverlay, on screen: NSScreen) {
         let position = WebcamPosition(rawValue: UserDefaults.standard.string(forKey: "webcamPosition") ?? "bottomRight") ?? .bottomRight
-        let size = WebcamSize(rawValue: UserDefaults.standard.string(forKey: "webcamSize") ?? "medium") ?? .medium
         let shape = WebcamShape(rawValue: UserDefaults.standard.string(forKey: "webcamShape") ?? "circle") ?? .circle
         let screenOrigin = screen.frame.origin
         let screenRect = NSRect(
@@ -7813,7 +7814,9 @@ class OverlayView: NSView {
             y: selectionRect.origin.y + screenOrigin.y,
             width: selectionRect.width,
             height: selectionRect.height)
-        overlay.configure(position: position, size: size, shape: shape, recordingRect: screenRect)
+        overlay.configure(
+            position: position, size: WebcamSize.savedPoints,
+            shape: shape, recordingRect: screenRect)
     }
 
     private func showCameraPermissionAlert() {
@@ -8033,12 +8036,6 @@ class OverlayView: NSView {
             commitTextFieldIfNeeded()
             stampPreviewPoint = nil
             loupeCursorPoint = .zero
-            // Auto-enable beautify on first click in this session
-            if !beautifyEnabled {
-                beautifyEnabled = true
-                UserDefaults.standard.set(true, forKey: "beautifyEnabled")
-                startBeautifyToolbarAnimation()
-            }
             // Load the custom background eagerly if that style is selected (the
             // beautifyConfig getter no longer does this as a side effect).
             ensureCustomBeautifyBackgroundLoaded()

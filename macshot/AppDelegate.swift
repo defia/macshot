@@ -2670,9 +2670,10 @@ extension AppDelegate: OverlayWindowControllerDelegate {
             } else {
                 let overlay = WebcamOverlay(screen: screen)
                 let position = WebcamPosition(rawValue: UserDefaults.standard.string(forKey: "webcamPosition") ?? "bottomRight") ?? .bottomRight
-                let wcSize = WebcamSize(rawValue: UserDefaults.standard.string(forKey: "webcamSize") ?? "medium") ?? .medium
                 let shape = WebcamShape(rawValue: UserDefaults.standard.string(forKey: "webcamShape") ?? "circle") ?? .circle
-                overlay.configure(position: position, size: wcSize, shape: shape, recordingRect: rect)
+                overlay.configure(
+                    position: position, size: WebcamSize.savedPoints,
+                    shape: shape, recordingRect: rect)
                 overlay.startPreview(deviceUID: UserDefaults.standard.string(forKey: "selectedCameraDeviceUID"))
                 overlay.setDraggable(false)
                 overlay.orderFrontRegardless()
