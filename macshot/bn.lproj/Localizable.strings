@@ -671,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "এডিটরে একটি ইতিহাস এন্ট্রি খুলুন (টীকা সম্পাদনাযোগ্য থাকে)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "নির্বাচনের স্বয়ংক্রিয় সমন্বয়";
+"Auto-adjust selection" = "নির্বাচন স্বয়ংক্রিয়ভাবে সামঞ্জস্য করুন";
+"Could not analyze selection edges" = "নির্বাচনের প্রান্ত বিশ্লেষণ করা যায়নি";
+"Detecting nearby edges…" = "কাছাকাছি প্রান্ত শনাক্ত করা হচ্ছে…";
+"No nearby edges found" = "কাছাকাছি কোনো প্রান্ত পাওয়া যায়নি";
+"Selection adjusted" = "নির্বাচন সামঞ্জস্য করা হয়েছে";
+"Selection is already aligned" = "নির্বাচন ইতিমধ্যে সারিবদ্ধ";
+"Space to move. Release to annotate and edit" = "সরাতে স্পেস চেপে ধরুন। টীকা যোগ ও সম্পাদনা করতে ছেড়ে দিন";
+"Space to move. Release to finish" = "সরাতে স্পেস চেপে ধরুন। শেষ করতে ছেড়ে দিন";

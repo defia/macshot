@@ -669,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Otvori stavku povijesti u uređivaču (bilješke ostaju uredive)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Automatski prilagodi odabir";
+"Auto-adjust selection" = "Automatski prilagodi odabir";
+"Could not analyze selection edges" = "Nije moguće analizirati rubove odabira";
+"Detecting nearby edges…" = "Otkrivanje obližnjih rubova…";
+"No nearby edges found" = "Nisu pronađeni obližnji rubovi";
+"Selection adjusted" = "Odabir je prilagođen";
+"Selection is already aligned" = "Odabir je već poravnat";
+"Space to move. Release to annotate and edit" = "Držite razmaknicu za pomicanje. Otpustite za dodavanje bilješki i uređivanje";
+"Space to move. Release to finish" = "Držite razmaknicu za pomicanje. Otpustite za završetak";

@@ -671,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "在編輯器中開啟歷史記錄項目（標註仍可編輯）";
+
+/* Selection edge adjustment */
+"Auto-Adjust Selection" = "自動調整選取範圍";
+"Auto-adjust selection" = "自動調整選取範圍";
+"Could not analyze selection edges" = "無法分析選取範圍邊緣";
+"Detecting nearby edges…" = "正在偵測附近邊緣…";
+"No nearby edges found" = "找不到附近的邊緣";
+"Selection adjusted" = "已調整選取範圍";
+"Selection is already aligned" = "選取範圍已對齊";
+"Space to move. Release to annotate and edit" = "按住空白鍵移動。放開後進行標註和編輯";
+"Space to move. Release to finish" = "按住空白鍵移動。放開後完成";

@@ -671,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Obre una entrada de l'historial a l'editor (manté les anotacions editables)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Ajust automàtic de la selecció";
+"Auto-adjust selection" = "Ajusta automàticament la selecció";
+"Could not analyze selection edges" = "No s'han pogut analitzar les vores de la selecció";
+"Detecting nearby edges…" = "S'estan detectant les vores properes…";
+"No nearby edges found" = "No s'ha trobat cap vora propera";
+"Selection adjusted" = "S'ha ajustat la selecció";
+"Selection is already aligned" = "La selecció ja està alineada";
+"Space to move. Release to annotate and edit" = "Mantén premuda la barra espai per moure. Deixa-la anar per anotar i editar";
+"Space to move. Release to finish" = "Mantén premuda la barra espai per moure. Deixa-la anar per acabar";

@@ -669,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Deschide o intrare din istoric în editor (păstrează adnotările editabile)";
+
+/* Auto-adjust selection (#317) */
+"Auto-Adjust Selection" = "Ajustare automată a selecției";
+"Auto-adjust selection" = "Ajustează automat selecția";
+"Could not analyze selection edges" = "Nu s-au putut analiza marginile selecției";
+"Detecting nearby edges…" = "Se detectează marginile din apropiere…";
+"No nearby edges found" = "Nu s-au găsit margini în apropiere";
+"Selection adjusted" = "Selecție ajustată";
+"Selection is already aligned" = "Selecția este deja aliniată";
+"Space to move. Release to annotate and edit" = "Spațiu pentru mutare. Eliberează pentru a adăuga adnotări și a edita";
+"Space to move. Release to finish" = "Spațiu pentru mutare. Eliberează pentru a finaliza";

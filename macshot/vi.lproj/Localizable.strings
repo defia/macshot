@@ -669,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Mở một mục lịch sử trong trình chỉnh sửa (giữ chú thích có thể chỉnh sửa)";
+
+/* Selection edge adjustment */
+"Auto-Adjust Selection" = "Tự động điều chỉnh vùng chọn";
+"Auto-adjust selection" = "Tự động điều chỉnh vùng chọn";
+"Could not analyze selection edges" = "Không thể phân tích các cạnh của vùng chọn";
+"Detecting nearby edges…" = "Đang dò các cạnh gần đó…";
+"No nearby edges found" = "Không tìm thấy cạnh nào gần đó";
+"Selection adjusted" = "Đã điều chỉnh vùng chọn";
+"Selection is already aligned" = "Vùng chọn đã được căn chỉnh";
+"Space to move. Release to annotate and edit" = "Giữ phím cách để di chuyển. Thả ra để chú thích và chỉnh sửa";
+"Space to move. Release to finish" = "Giữ phím cách để di chuyển. Thả ra để hoàn tất";

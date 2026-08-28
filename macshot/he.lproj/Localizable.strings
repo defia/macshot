@@ -671,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "פתח רשומת היסטוריה בעורך (שומר על הערות ניתנות לעריכה)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "התאמה אוטומטית של הבחירה";
+"Auto-adjust selection" = "התאמה אוטומטית של הבחירה";
+"Could not analyze selection edges" = "לא ניתן היה לנתח את גבולות הבחירה";
+"Detecting nearby edges…" = "מזהה גבולות סמוכים…";
+"No nearby edges found" = "לא נמצאו גבולות סמוכים";
+"Selection adjusted" = "הבחירה הותאמה";
+"Selection is already aligned" = "הבחירה כבר מיושרת";
+"Space to move. Release to annotate and edit" = "החזיקו את מקש הרווח כדי להזיז. שחררו כדי להוסיף הערות ולערוך";
+"Space to move. Release to finish" = "החזיקו את מקש הרווח כדי להזיז. שחררו כדי לסיים";

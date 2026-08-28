@@ -669,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "เปิดรายการประวัติในตัวแก้ไข (ยังแก้ไขคำอธิบายประกอบได้)";
+
+/* Selection edge adjustment */
+"Auto-Adjust Selection" = "ปรับขอบเขตการเลือกอัตโนมัติ";
+"Auto-adjust selection" = "ปรับขอบเขตการเลือกอัตโนมัติ";
+"Could not analyze selection edges" = "ไม่สามารถวิเคราะห์ขอบเขตการเลือกได้";
+"Detecting nearby edges…" = "กำลังตรวจหาขอบที่อยู่ใกล้เคียง…";
+"No nearby edges found" = "ไม่พบขอบที่อยู่ใกล้เคียง";
+"Selection adjusted" = "ปรับขอบเขตการเลือกแล้ว";
+"Selection is already aligned" = "ขอบเขตการเลือกตรงแนวอยู่แล้ว";
+"Space to move. Release to annotate and edit" = "กด Space ค้างไว้เพื่อย้าย ปล่อยเพื่อใส่คำอธิบายประกอบและแก้ไข";
+"Space to move. Release to finish" = "กด Space ค้างไว้เพื่อย้าย ปล่อยเพื่อเสร็จสิ้น";

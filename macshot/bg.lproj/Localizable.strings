@@ -669,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Отваряне на запис от историята в редактора (анотациите остават редактируеми)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Автоматично коригиране на селекцията";
+"Auto-adjust selection" = "Коригиране на селекцията автоматично";
+"Could not analyze selection edges" = "Неуспешен анализ на краищата на селекцията";
+"Detecting nearby edges…" = "Откриване на близки краища…";
+"No nearby edges found" = "Не са намерени близки краища";
+"Selection adjusted" = "Селекцията е коригирана";
+"Selection is already aligned" = "Селекцията вече е подравнена";
+"Space to move. Release to annotate and edit" = "Задръжте интервала за преместване. Отпуснете за анотиране и редактиране";
+"Space to move. Release to finish" = "Задръжте интервала за преместване. Отпуснете за завършване";

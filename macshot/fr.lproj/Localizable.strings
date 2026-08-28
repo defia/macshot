@@ -669,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Ouvrir une entrée de l'historique dans l'éditeur (annotations modifiables)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Ajuster automatiquement la sélection";
+"Auto-adjust selection" = "Ajuster automatiquement la sélection";
+"Could not analyze selection edges" = "Impossible d'analyser les contours de la sélection";
+"Detecting nearby edges…" = "Détection des contours à proximité…";
+"No nearby edges found" = "Aucun contour trouvé à proximité";
+"Selection adjusted" = "Sélection ajustée";
+"Selection is already aligned" = "La sélection est déjà alignée";
+"Space to move. Release to annotate and edit" = "Maintenez la barre d'espace pour déplacer. Relâchez pour annoter et modifier";
+"Space to move. Release to finish" = "Maintenez la barre d'espace pour déplacer. Relâchez pour terminer";

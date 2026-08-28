@@ -671,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Abrir um item do histórico no editor (mantém as anotações editáveis)";
+
+/* Auto-adjust selection (#317) */
+"Auto-Adjust Selection" = "Ajuste automático da seleção";
+"Auto-adjust selection" = "Ajustar seleção automaticamente";
+"Could not analyze selection edges" = "Não foi possível analisar as bordas da seleção";
+"Detecting nearby edges…" = "Detectando bordas próximas…";
+"No nearby edges found" = "Nenhuma borda próxima encontrada";
+"Selection adjusted" = "Seleção ajustada";
+"Selection is already aligned" = "A seleção já está alinhada";
+"Space to move. Release to annotate and edit" = "Espaço para mover. Solte para anotar e editar";
+"Space to move. Release to finish" = "Espaço para mover. Solte para concluir";

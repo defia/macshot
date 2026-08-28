@@ -669,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Buka entri riwayat di editor (anotasi tetap dapat diedit)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Sesuaikan Pilihan Secara Otomatis";
+"Auto-adjust selection" = "Sesuaikan pilihan secara otomatis";
+"Could not analyze selection edges" = "Tidak dapat menganalisis tepi pilihan";
+"Detecting nearby edges…" = "Mendeteksi tepi di sekitar…";
+"No nearby edges found" = "Tidak ada tepi di sekitar yang ditemukan";
+"Selection adjusted" = "Pilihan disesuaikan";
+"Selection is already aligned" = "Pilihan sudah sejajar";
+"Space to move. Release to annotate and edit" = "Tahan Spacebar untuk memindahkan. Lepaskan untuk membuat anotasi dan mengedit";
+"Space to move. Release to finish" = "Tahan Spacebar untuk memindahkan. Lepaskan untuk selesai";

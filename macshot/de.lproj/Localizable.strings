@@ -671,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Verlaufseintrag im Editor öffnen (Anmerkungen bleiben bearbeitbar)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Automatische Auswahlanpassung";
+"Auto-adjust selection" = "Auswahl automatisch anpassen";
+"Could not analyze selection edges" = "Auswahlkanten konnten nicht analysiert werden";
+"Detecting nearby edges…" = "Nahe Kanten werden erkannt…";
+"No nearby edges found" = "Keine nahen Kanten gefunden";
+"Selection adjusted" = "Auswahl angepasst";
+"Selection is already aligned" = "Auswahl ist bereits ausgerichtet";
+"Space to move. Release to annotate and edit" = "Leertaste zum Verschieben gedrückt halten. Loslassen, um zu kommentieren und zu bearbeiten";
+"Space to move. Release to finish" = "Leertaste zum Verschieben gedrückt halten. Loslassen, um abzuschließen";
