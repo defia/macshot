@@ -22,6 +22,7 @@ enum ToolbarButtonAction {
     case beautifyStyle
     case cancel
     case moveSelection
+    case adjustSelection
     case delayCapture
     case upload
     case share

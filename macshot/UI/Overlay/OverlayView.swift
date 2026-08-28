@@ -129,6 +129,7 @@ class OverlayView: NSView {
             boundarySnapIndex = nil
             boundarySnapGuideX = nil
             boundarySnapGuideY = nil
+            pendingAutoAdjustSelection = false
             if boundarySnapEnabled, !isEditorMode {
                 scheduleBoundarySnapIndexBuild()
             }
@@ -902,6 +903,7 @@ class OverlayView: NSView {
     }
     private var boundarySnapIndex: BoundarySnapIndex?
     private var boundarySnapBuildGeneration = 0
+    private var pendingAutoAdjustSelection = false
     /// Snap radius in overlay points.
     private let boundarySnapRadiusPoints: CGFloat = 4
     /// Overlay-space coordinates of the active snapped edge(s), for the guide
@@ -2658,6 +2660,12 @@ class OverlayView: NSView {
         view.onPickUnit = { [weak self] idx in
             self?.resolutionUnitIsPoints = (idx == 1)
             self?.refreshResolutionAndToolbarLayout()  // re-display W/H in the new unit
+        }
+        view.showsAutoAdjustButton = !isEditorMode
+        view.autoAdjustShortcut = ToolShortcutManager.tooltipShortcut(for: .adjustSelection)
+        view.onAutoAdjust = { [weak self] in
+            PopoverHelper.dismiss()
+            self?.autoAdjustSelection()
         }
         view.build()
         PopoverHelper.show(view, size: view.preferredSize,
@@ -7209,6 +7217,107 @@ class OverlayView: NSView {
         return p
     }
 
+    /// Refine all four edges of an existing selection in one explicit action.
+    /// This deliberately does not consult `boundarySnapEnabled` and does not
+    /// alter the drag-time snap radius or behavior.
+    private func autoAdjustSelection() {
+        guard state == .selected, !isEditorMode, selectionRect.width >= 4,
+              selectionRect.height >= 4 else { return }
+
+        guard let index = boundarySnapIndex else {
+            guard screenshotImage?.cgImage(
+                forProposedRect: nil, context: nil, hints: nil) != nil else {
+                showOverlayError(L("Could not analyze selection edges"))
+                return
+            }
+            if !pendingAutoAdjustSelection {
+                pendingAutoAdjustSelection = true
+                scheduleBoundarySnapIndexBuild()
+            }
+            showOverlayError(L("Detecting nearby edges…"))
+            return
+        }
+
+        pendingAutoAdjustSelection = false
+        let original = selectionRect.standardized
+        let minimumSize: CGFloat = 4
+        // Wider than the normal four-point drag snap: a rough selection can
+        // intentionally leave substantial padding around the target. Score
+        // against the central span so rounded corners and uneven outer padding
+        // do not disqualify otherwise continuous element edges.
+        let horizontalSearch = min(160, max(48, original.width * 0.30))
+        let verticalSearch = min(160, max(48, original.height * 0.30))
+        let verticalSpanInset = original.height * 0.15
+        let horizontalSpanInset = original.width * 0.15
+        let verticalSpanMin = original.minY + verticalSpanInset
+        let verticalSpanMax = original.maxY - verticalSpanInset
+        let horizontalSpanMin = original.minX + horizontalSpanInset
+        let horizontalSpanMax = original.maxX - horizontalSpanInset
+
+        let left = index.nearestVertical(
+            toViewX: original.minX,
+            yMinView: verticalSpanMin,
+            yMaxView: verticalSpanMax,
+            radiusPoints: horizontalSearch)
+        let right = index.nearestVertical(
+            toViewX: original.maxX,
+            yMinView: verticalSpanMin,
+            yMaxView: verticalSpanMax,
+            radiusPoints: horizontalSearch)
+        let bottom = index.nearestHorizontal(
+            toViewY: original.minY,
+            xMinView: horizontalSpanMin,
+            xMaxView: horizontalSpanMax,
+            radiusPoints: verticalSearch)
+        let top = index.nearestHorizontal(
+            toViewY: original.maxY,
+            xMinView: horizontalSpanMin,
+            xMaxView: horizontalSpanMax,
+            radiusPoints: verticalSearch)
+
+        let candidateMinX = left?.viewPosition ?? original.minX
+        let candidateMaxX = right?.viewPosition ?? original.maxX
+        let candidateMinY = bottom?.viewPosition ?? original.minY
+        let candidateMaxY = top?.viewPosition ?? original.maxY
+
+        var adjusted = original
+        if candidateMaxX - candidateMinX >= minimumSize {
+            adjusted.origin.x = candidateMinX
+            adjusted.size.width = candidateMaxX - candidateMinX
+        }
+        if candidateMaxY - candidateMinY >= minimumSize {
+            adjusted.origin.y = candidateMinY
+            adjusted.size.height = candidateMaxY - candidateMinY
+        }
+
+        let changed = abs(adjusted.minX - original.minX) > 0.25
+            || abs(adjusted.maxX - original.maxX) > 0.25
+            || abs(adjusted.minY - original.minY) > 0.25
+            || abs(adjusted.maxY - original.maxY) > 0.25
+        guard changed else {
+            let foundEdge = left != nil || right != nil || bottom != nil || top != nil
+            showOverlayError(foundEdge ? L("Selection is already aligned") : L("No nearby edges found"))
+            return
+        }
+
+        selectionRect = adjusted
+        lockedAspect = nil
+        boundarySnapGuideX = nil
+        boundarySnapGuideY = nil
+        if selectionIsWindowSnap {
+            selectionIsWindowSnap = false
+            snappedWindowID = nil
+            snappedWindowImage = nil
+            rebuildToolbarLayout()
+        }
+        overlayDelegate?.overlayViewSelectionDidChange(selectionRect)
+        if webcamSetupPreview != nil { repositionWebcamSetupPreview() }
+        refreshResolutionAndToolbarLayout()
+        updateCursorForCurrentTool()
+        showOverlayError(L("Selection adjusted"))
+        needsDisplay = true
+    }
+
     /// Build the boundary-snap edge index for the current screenshot off the
     /// main thread, discarding the result if a newer screenshot arrived.
     private func scheduleBoundarySnapIndexBuild() {
@@ -7222,6 +7331,14 @@ class OverlayView: NSView {
             DispatchQueue.main.async {
                 guard let self, self.boundarySnapBuildGeneration == generation else { return }
                 self.boundarySnapIndex = index
+                if self.pendingAutoAdjustSelection {
+                    self.pendingAutoAdjustSelection = false
+                    if index != nil {
+                        self.autoAdjustSelection()
+                    } else {
+                        self.showOverlayError(L("Could not analyze selection edges"))
+                    }
+                }
             }
         }
     }
@@ -7920,6 +8037,8 @@ class OverlayView: NSView {
             showColorPickerPopover(target: .drawColor, anchorView: colorBtn)
         case .sizeDisplay:
             break
+        case .adjustSelection:
+            autoAdjustSelection()
         case .moveSelection:
             guard let win = window else { break }
             isToolbarMoveDragActive = true
@@ -9905,6 +10024,7 @@ class OverlayView: NSView {
         isKeyboardMoveSelectionActive = false
         isToolbarMoveDragActive = false
         keyboardMoveSelectionShortcut = ""
+        pendingAutoAdjustSelection = false
         selectedAnnotation = nil
         isDraggingAnnotation = false
         hoveredAnnotationClearTimer?.invalidate()
