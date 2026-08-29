@@ -216,6 +216,15 @@ final class RecordingEngine: NSObject {
             self.streamOutput = output
 
             let stream = SCStream(filter: filter, configuration: config, delegate: output)
+            // Take ownership before the stream can go live. Everything below can
+            // throw, and the task can be cancelled — both `finalizeCapture()` and
+            // the `catch` need a handle to call `stopCapture()` on. Assigning only
+            // after `startCapture()` leaves a window where the local `stream`
+            // deallocates while the daemon is already capturing. replayd then
+            // pushes frames into a dead queue for the lifetime of the login
+            // session (err=-16665 "Client terminated the queue"), once per frame
+            // interval, with no way to stop it short of killing replayd.
+            self.stream = stream
             try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: recordingQueue)
             if #available(macOS 13.0, *) {
                 let recordAudio = UserDefaults.standard.bool(forKey: "recordSystemAudio")
@@ -224,7 +233,6 @@ final class RecordingEngine: NSObject {
                 }
             }
             try await stream.startCapture()
-            self.stream = stream
 
             // Start mic capture if enabled and authorized (permission resolved before capture started)
             if UserDefaults.standard.bool(forKey: "recordMicAudio") &&
@@ -242,6 +250,12 @@ final class RecordingEngine: NSObject {
             }
 
         } catch {
+            // Never leave a started stream running behind a failed setup.
+            if let stream = self.stream {
+                try? await stream.stopCapture()
+                self.stream = nil
+            }
+            self.streamOutput = nil
             await MainActor.run { self.fail(error) }
         }
     }
