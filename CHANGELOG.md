@@ -1,5 +1,24 @@
 # Changelog
 
+## [4.2.2-beta.3] - 2026-08-29
+
+### Added
+
+- **Auto-adjust selection** — refine all four sides of a rough selection to nearby visual edges from the size presets panel or a configurable shortcut. (#317)
+- **Configurable Undo/Redo shortcuts** — customize, disable, or reset editor command shortcuts in Settings, with semantic key matching across keyboard layouts.
+
+### Changed
+
+- **Beautify controls** — the effect toggle is clearer, disabled controls reflect the current state, and webcam sizing now uses a continuous 80–480 px slider that stays within the recording area.
+
+### Fixed
+
+- Window captures preserve their native shadows.
+- The color sampler reads from the composited canvas and keeps its cursor stable over annotations.
+- Recording setup failures now stop their active ScreenCaptureKit stream instead of leaking work in `replayd`. (#367)
+- **Close Window** (Command-W) now routes through the standard File menu to the active window. (#364)
+- **Video editor Copy** writes playable MP4 data for Mail, Notes, and other paste targets while retaining safe fallbacks for MOV and large files. (#329, #337)
+
 ## [4.2.2-beta.2] - 2026-08-12
 
 ### Added
