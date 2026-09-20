@@ -18,7 +18,6 @@ class TableRecognitionResultController: NSObject {
             filename: "recognized-table-\(UUID().uuidString).xlsx"
         )
         super.init()
-        try workbookData.write(to: temporaryWorkbookURL, options: .atomic)
         buildWindow()
     }
 
@@ -135,6 +134,7 @@ class TableRecognitionResultController: NSObject {
     }
 
     @objc private func openExcelFile() {
+        guard prepareTemporaryWorkbook() else { return }
         guard NSWorkspace.shared.open(temporaryWorkbookURL) else {
             showOpenError()
             return
@@ -165,13 +165,31 @@ class TableRecognitionResultController: NSObject {
     }
 
     @objc private func copyExcelFile() {
+        guard prepareTemporaryWorkbook() else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         guard pasteboard.writeObjects([temporaryWorkbookURL as NSURL]) else {
             showWriteError(nil)
             return
         }
+        // The pasteboard holds a URL; consumers may read it after this window closes.
+        removesTemporaryWorkbookOnClose = false
         close()
+    }
+
+    private func prepareTemporaryWorkbook() -> Bool {
+        do {
+            // Retry directory creation too, in case an earlier attempt failed.
+            try FileManager.default.createDirectory(
+                at: temporaryWorkbookURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try workbookData.write(to: temporaryWorkbookURL, options: .atomic)
+            return true
+        } catch {
+            showWriteError(error)
+            return false
+        }
     }
 
     @objc private func copyAsTSV() {
@@ -281,8 +299,7 @@ private class TableResultPanel: NSPanel {
     override var canBecomeMain: Bool { true }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-           event.keyCode == 13 {
+        if KeyboardShortcutMatcher.matches(event, character: "w", modifiers: .command) {
             performClose(nil)
             return true
         }
