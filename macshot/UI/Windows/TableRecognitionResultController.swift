@@ -24,7 +24,7 @@ class TableRecognitionResultController: NSObject {
     private func buildWindow() {
         let width: CGFloat = 760
         let height: CGFloat = 500
-        let screen = NSScreen.main ?? NSScreen.screens[0]
+        guard let screen = NSScreen.preferred else { return }
         let origin = NSPoint(
             x: screen.visibleFrame.midX - width / 2,
             y: screen.visibleFrame.midY - height / 2

@@ -712,7 +712,7 @@
 "Table Recognition Failed" = "Rozpoznání tabulky se nezdařilo";
 "No text was detected in the selected area." = "Ve vybrané oblasti nebyl zjištěn žádný text.";
 "No table structure was detected. Select a table with at least two rows and two columns." = "Nebyla zjištěna struktura tabulky. Vyberte tabulku s alespoň dvěma řádky a dvěma sloupci.";
-"The recognized table is too large to create an Excel file." = "Rozpoznaná tabulka je příliš velká pro vytvoření souboru Excel.";
+"The recognized table is too large to create an Excel file." = "Rozpoznaná tabulka je příliš velká pro export do Excelu.";
 "Could Not Create Excel File" = "Soubor Excel se nepodařilo vytvořit";
 "The Excel file could not be written. Please try again." = "Soubor Excel se nepodařilo zapsat. Zkuste to znovu.";
 "Could Not Open Excel File" = "Soubor Excel se nepodařilo otevřít";
