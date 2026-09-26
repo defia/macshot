@@ -56,6 +56,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
     private var recordingToolAction: ToolShortcutManager.Action?
     private var savePathField: NSTextField!
     private var saveActionPopup: NSPopUpButton!
+    private var copyPathAfterSaveCheckbox: NSButton!
     private var ocrActionPopup: NSPopUpButton!
     private var copySoundCheckbox: NSButton!
     // rememberSelectionCheckbox removed — selection is always saved for "Capture Last Area"
@@ -104,6 +105,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
     private var quickCaptureOpenEditorCheckbox: NSButton!
     private var closeEditorAfterCopyCheckbox: NSButton!
     private var imageFormatPopup: NSPopUpButton!
+    private var clipboardFormatCheckbox: NSButton!
     private var qualitySlider: NSSlider!
     private var qualityLabel: NSTextField!
     private var qualityRowLabel: NSTextField!
@@ -283,7 +285,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
             view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
         currentTabID = id
-        window?.title = "\(BuildVariant.displayName) \(L("Settings")) — \(L(Self.tabDefs.first(where: { $0.id == id })?.label ?? ""))"
+        window?.title = "\(BuildVariant.displayName) \(L("Settings")) · \(L(Self.tabDefs.first(where: { $0.id == id })?.label ?? ""))"
         #if !OFFLINE
         if id == "uploads" {
             reloadUploadsTab()
@@ -747,7 +749,10 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
 
         // Enter key action
         quickModePopup = NSPopUpButton()
-        quickModePopup.addItems(withTitles: [L("Save to file"), L("Copy to clipboard"), L("Save + copy to clipboard"), L("Do nothing")])
+        for mode in QuickCaptureMode.settingsOrder {
+            quickModePopup.addItem(withTitle: mode.title)
+            quickModePopup.lastItem?.representedObject = mode.rawValue
+        }
         quickModePopup.target = self
         quickModePopup.action = #selector(quickModeChanged(_:))
 
@@ -916,6 +921,14 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         stack.addArrangedSubview(labeledRow(L("Save folder:"), controls: [savePathField, browseBtn]))
         stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
 
+        copyPathAfterSaveCheckbox = NSButton(
+            checkboxWithTitle: L("Copy Path"),
+            target: self,
+            action: #selector(copyPathAfterSaveChanged(_:))
+        )
+        stack.addArrangedSubview(indented(copyPathAfterSaveCheckbox))
+        stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
+
         // Filename template
         let filenameResetBtn = NSButton(title: L("Reset"), target: self, action: #selector(filenameTemplateReset(_:)))
         filenameResetBtn.bezelStyle = .rounded
@@ -945,6 +958,17 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         imageFormatPopup.action = #selector(imageFormatChanged(_:))
 
         stack.addArrangedSubview(labeledRow(L("Image format:"), controls: [imageFormatPopup]))
+        stack.setCustomSpacing(6, after: stack.arrangedSubviews.last!)
+
+        clipboardFormatCheckbox = NSButton(checkboxWithTitle: L("Also copy to the clipboard in this format"),
+                                           target: self, action: #selector(clipboardFormatChanged(_:)))
+        stack.addArrangedSubview(indented(clipboardFormatCheckbox))
+        stack.setCustomSpacing(2, after: stack.arrangedSubviews.last!)
+
+        let clipboardFormatNote = NSTextField(labelWithString: L("PNG is always included so every app can paste"))
+        clipboardFormatNote.font = NSFont.systemFont(ofSize: 10)
+        clipboardFormatNote.textColor = .tertiaryLabelColor
+        stack.addArrangedSubview(indented(clipboardFormatNote))
         stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
 
         // Quality (applies to lossy formats: JPEG, HEIC, WebP, AVIF)
@@ -1766,6 +1790,17 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         stack.addArrangedSubview(labeledRow(L("When done:"), controls: [recordingOnStopPopup]))
         stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
 
+        let editableCheckbox = NSButton(checkboxWithTitle: L("Editable pointer, clicks and keystrokes"),
+                                        target: self, action: #selector(editablePointerChanged(_:)))
+        editableCheckbox.state = AppDelegate.recordsEditablePointer ? .on : .off
+        stack.addArrangedSubview(indented(editableCheckbox))
+        let editableNote = NSTextField(wrappingLabelWithString: L("When recordings open in the editor, the pointer is recorded separately so you can smooth, resize, restyle or hide it, and add zooms that follow it."))
+        editableNote.font = NSFont.systemFont(ofSize: 10)
+        editableNote.textColor = .secondaryLabelColor
+        editableNote.preferredMaxLayoutWidth = 420
+        stack.addArrangedSubview(indented(editableNote))
+        stack.setCustomSpacing(10, after: stack.arrangedSubviews.last!)
+
         let hideHUDCheckbox = NSButton(checkboxWithTitle: L("Hide recording controls"), target: self, action: #selector(hideRecordingHUDChanged(_:)))
         hideHUDCheckbox.state = UserDefaults.standard.bool(forKey: "hideRecordingHUD") ? .on : .off
         stack.addArrangedSubview(indented(hideHUDCheckbox))
@@ -1934,7 +1969,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         stack.addArrangedSubview(labeledRow(L("Folder:"), controls: [gdriveFolderField]))
         stack.setCustomSpacing(4, after: stack.arrangedSubviews.last!)
 
-        let gdriveNote = NSTextField(wrappingLabelWithString: L("Files are uploaded to this folder in your Google Drive. Leave empty to use \"macshot\". macshot can only use folders it created itself, so a folder you made in Drive with the same name won't be reused — a new one is created instead. Everything stays private — nothing is shared publicly."))
+        let gdriveNote = NSTextField(wrappingLabelWithString: L("Files are uploaded to this folder in your Google Drive. Leave empty to use \"macshot\". macshot can only use folders it created itself, so a folder you made in Drive with the same name won't be reused. A new one is created instead. Everything stays private and nothing is shared publicly."))
         gdriveNote.font = NSFont.systemFont(ofSize: 10)
         gdriveNote.textColor = .secondaryLabelColor
         stack.addArrangedSubview(indented(gdriveNote))
@@ -1999,12 +2034,19 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         stack.addArrangedSubview(indented(publicURLNote))
 
         s3PathPrefixField = NSTextField()
-        s3PathPrefixField.placeholderString = "screenshots/"
+        s3PathPrefixField.placeholderString = "screenshots/{year}/{month}/{day}/"
         s3PathPrefixField.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         s3PathPrefixField.stringValue = UserDefaults.standard.string(forKey: "s3PathPrefix") ?? ""
         s3PathPrefixField.target = self
         s3PathPrefixField.action = #selector(s3FieldChanged(_:))
         stack.addArrangedSubview(labeledRow(L("Path Prefix:"), controls: [s3PathPrefixField]))
+        stack.setCustomSpacing(4, after: stack.arrangedSubviews.last!)
+
+        let pathPrefixNote = NSTextField(labelWithString:
+            "{year}/{month}/{day} → " + S3Uploader.Config.expandDatePlaceholders(in: "{year}/{month}/{day}"))
+        pathPrefixNote.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .regular)
+        pathPrefixNote.textColor = .secondaryLabelColor
+        stack.addArrangedSubview(indented(pathPrefixNote))
         stack.setCustomSpacing(8, after: stack.arrangedSubviews.last!)
 
         s3PublicReadCheckbox = NSButton(checkboxWithTitle: L("Make uploads publicly readable"), target: self, action: #selector(s3PublicReadChanged(_:)))
@@ -2054,7 +2096,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         stack.addArrangedSubview(labeledRow(L("API key:"), controls: [imgbbKeyField]))
         stack.setCustomSpacing(4, after: stack.arrangedSubviews.last!)
 
-        let imgbbNote = NSTextField(wrappingLabelWithString: L("A shared key is included — get your own free key at imgbb.com/api if you hit rate limits. Images only (no video support)."))
+        let imgbbNote = NSTextField(wrappingLabelWithString: L("A shared key is included. Get your own free key at imgbb.com/api if you hit rate limits. Images only (no video support)."))
         imgbbNote.font = NSFont.systemFont(ofSize: 10)
         imgbbNote.textColor = .secondaryLabelColor
         stack.addArrangedSubview(indented(imgbbNote))
@@ -2132,7 +2174,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         stack.setCustomSpacing(20, after: versionLabel)
 
         // Description
-        let desc = NSTextField(wrappingLabelWithString: L("A free, open-source screenshot & screen recording tool for macOS.\nFully native — built with Swift and AppKit."))
+        let desc = NSTextField(wrappingLabelWithString: L("A free, open-source screenshot & screen recording tool for macOS.\nFully native, built with Swift and AppKit."))
         desc.font = NSFont.systemFont(ofSize: 13)
         desc.textColor = .labelColor
         desc.alignment = .center
@@ -2575,6 +2617,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
 
         savePathField.stringValue = SaveDirectoryAccess.displayPath
         selectSaveAction(SaveActionPreference.current)
+        copyPathAfterSaveCheckbox.state = ImageSaveService.copyPathAfterSave ? .on : .off
 
         // Migrate legacy bool to new int setting
         if UserDefaults.standard.object(forKey: "ocrAction") == nil {
@@ -2661,16 +2704,18 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
             // If old autoCopy was on + save mode, migrate to "both"
             let hadAutoCopy = UserDefaults.standard.object(forKey: "autoCopyToClipboard") as? Bool ?? true
             let migratedMode = (!oldBool && hadAutoCopy) ? 2 : mode
-            UserDefaults.standard.set(migratedMode, forKey: "quickCaptureMode")
+            UserDefaults.standard.set(migratedMode, forKey: QuickCaptureMode.userDefaultsKey)
             UserDefaults.standard.removeObject(forKey: "quickModeCopyToClipboard")
             UserDefaults.standard.removeObject(forKey: "autoCopyToClipboard")
         }
-        let quickMode = UserDefaults.standard.object(forKey: "quickCaptureMode") as? Int ?? 1
-        quickModePopup.selectItem(at: quickMode)
+        let quickMode = QuickCaptureMode.current
+        quickModePopup.select(
+            quickModePopup.itemArray.first { $0.representedObject as? Int == quickMode.rawValue })
         quickCaptureOpenEditorCheckbox.state = UserDefaults.standard.bool(forKey: "quickCaptureOpenEditor") ? .on : .off
         closeEditorAfterCopyCheckbox.state = UserDefaults.standard.bool(forKey: "closeEditorAfterCopy") ? .on : .off
 
         selectImageFormat(ImageEncoder.format)
+        clipboardFormatCheckbox.state = ImageEncoder.clipboardIncludesImageFormat ? .on : .off
 
         let quality = Int(ImageEncoder.quality * 100)
         qualitySlider.integerValue = quality
@@ -2732,6 +2777,8 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         qualitySlider.isEnabled = hasQuality
         qualityLabel.textColor = hasQuality ? .labelColor : .tertiaryLabelColor
         qualityRowLabel.textColor = hasQuality ? .labelColor : .tertiaryLabelColor
+        // PNG is already on the clipboard, so the option only matters for other formats.
+        clipboardFormatCheckbox.isEnabled = raw.flatMap(ImageEncoder.Format.init(rawValue:)).map { $0 != .png } ?? false
     }
 
     private func selectImageFormat(_ format: ImageEncoder.Format) {
@@ -2777,6 +2824,9 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
               let action = SaveActionPreference(rawValue: raw) else { return }
         SaveActionPreference.current = action
     }
+    @objc private func copyPathAfterSaveChanged(_ sender: NSButton) {
+        ImageSaveService.copyPathAfterSave = sender.state == .on
+    }
     @objc private func copySoundChanged(_ sender: NSButton) {
         UserDefaults.standard.set(sender.state == .on, forKey: "playCopySound")
     }
@@ -2814,7 +2864,9 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         UserDefaults.standard.set(values[sender.indexOfSelectedItem], forKey: "thumbnailCorner")
     }
     @objc private func quickModeChanged(_ sender: NSPopUpButton) {
-        UserDefaults.standard.set(sender.indexOfSelectedItem, forKey: "quickCaptureMode")
+        guard let rawValue = sender.selectedItem?.representedObject as? Int,
+              QuickCaptureMode(rawValue: rawValue) != nil else { return }
+        UserDefaults.standard.set(rawValue, forKey: QuickCaptureMode.userDefaultsKey)
     }
     @objc private func quickCaptureOpenEditorChanged(_ sender: NSButton) {
         UserDefaults.standard.set(sender.state == .on, forKey: "quickCaptureOpenEditor")
@@ -2842,6 +2894,9 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
     @objc private func qualityChanged(_ sender: NSSlider) {
         qualityLabel.stringValue = String(format: L("%d%%"), sender.integerValue)
         UserDefaults.standard.set(Double(sender.integerValue) / 100.0, forKey: "imageQuality")
+    }
+    @objc private func clipboardFormatChanged(_ sender: NSButton) {
+        UserDefaults.standard.set(sender.state == .on, forKey: "clipboardIncludesImageFormat")
     }
     @objc private func downscaleRetinaChanged(_ sender: NSButton) {
         UserDefaults.standard.set(sender.state == .on, forKey: "downscaleRetina")
@@ -2885,6 +2940,10 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
         let fps = fpsOptions[min(sender.indexOfSelectedItem, fpsOptions.count - 1)]
         UserDefaults.standard.set(fps, forKey: "recordingFPS")
     }
+    @objc private func editablePointerChanged(_ sender: NSButton) {
+        UserDefaults.standard.set(sender.state == .on, forKey: AppDelegate.editablePointerDefaultsKey)
+    }
+
     @objc private func recordingOnStopChanged(_ sender: NSPopUpButton) {
         let values = ["editor", "finder", "clipboard"]
         UserDefaults.standard.set(values[sender.indexOfSelectedItem], forKey: "recordingOnStop")
@@ -3023,7 +3082,8 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSWindowD
 
     @objc private func themePresetChanged(_ sender: NSPopUpButton) {
         let idx = sender.indexOfSelectedItem
-        guard idx < ThemePreset.all.count else { return } // "Custom" — no-op
+        // indexOfSelectedItem is -1 with no selection, which passes "< count".
+        guard idx >= 0, idx < ThemePreset.all.count else { return } // "Custom" — no-op
         applyThemePreset(ThemePreset.all[idx])
     }
 
@@ -3391,7 +3451,7 @@ extension SettingsWindowController {
             ("{time}",      "14-22-05"),
             ("{timestamp}", "2026-04-17_14-22-05"),
             ("{unix}",      "1745592125"),
-            ("{window}",    L("Screenshots only — captured window title (blank otherwise)")),
+            ("{window}",    L("Captured window title (screenshots only, blank otherwise)")),
             ("{index}",     L("Counter for multi-screen captures")),
             ("{random}",    L("8-character random string (e.g. k3j7x9q2)")),
         ]
